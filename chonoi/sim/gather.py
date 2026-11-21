@@ -16,8 +16,8 @@ from .ramp import ramp_velocity
 TICK = 60.0
 AXES = ("x", "d")
 
-SPAWN_X = [15.0, 30.0, 45.0, 60.0, 75.0, 90.0]
-SPAWN_DEPTHS = {
+DEFAULT_SPAWN_X = [15.0, 30.0, 45.0, 60.0, 75.0, 90.0]
+DEFAULT_SPAWN_DEPTHS = {
     "ca_linh": [5.0, 10.0],
     "ca_loc": [10.0, 16.0],
     "ca_keo": [24.0, 27.0],
@@ -66,11 +66,13 @@ class GatherSim:
             else:
                 # Phase 2: fish_initial là số nguyên 8
                 count = int(raw_initial)
+                sp_x = t.get("fish_spawn_x", DEFAULT_SPAWN_X)
+                sp_d = t.get("fish_spawn_depths", DEFAULT_SPAWN_DEPTHS)
                 all_pts = []
-                for sp, d_list in SPAWN_DEPTHS.items():
-                    for x in SPAWN_X:
+                for sp, d_list in sp_d.items():
+                    for x in sp_x:
                         for d in d_list:
-                            all_pts.append((sp, [x, d]))
+                            all_pts.append((sp, [float(x), float(d)]))
                 chosen_pts = self.rng.get("fish_spawn").sample(all_pts, min(count, len(all_pts)))
                 src_fish = []
                 for sp, pt in chosen_pts:
@@ -145,16 +147,15 @@ class GatherSim:
             "nodes": [{"id": n["id"], "pos": list(n["pos"]), "kind": n["kind"],
                        "ready": n["regrow_ticks"] == 0, "regrow_ticks": n["regrow_ticks"]}
                       for n in sort_by_id(self.nodes)],
-            "fish": [{"id": f["id"], "pos": list(f["pos"]), "kind": f["kind"], "heading_deg": f["heading_deg"]}
+            "fish": [{"id": f["id"], "pos": list(f["pos"]), "kind": f["kind"], "heading_deg": f["heading_deg"],
+                      "age_ticks": f.get("age_ticks", 0)}
                      for f in sort_by_id(self.fish)],
         }
         if "monsters" in self.scenario or "monsters" in self.t or len(self.monsters) > 0:
             snap["monsters"] = [
                 {"id": m["id"], "kind": m["kind"], "pos": list(m["pos"]),
-                 "waypoints": [list(wp) for wp in m["waypoints"]],
-                 "target_idx": m["target_idx"], "state": m["state"],
-                 "state_ticks_left": m["state_ticks_left"],
-                 "recoil_dir": list(m["recoil_dir"]) if m["recoil_dir"] else None}
+                 "state": m["state"], "target_idx": m["target_idx"],
+                 "state_ticks_left": m["state_ticks_left"]}
                 for m in sort_by_id(self.monsters)
             ]
         if self.ca_ho is not None:
@@ -273,14 +274,26 @@ class GatherSim:
         if not self.monsters:
             return False
 
+        mo_cfg = self.t.get("monsters", {})
+        species_dict = mo_cfg.get("species", {})
+
         # 1. Quái di chuyển theo trạng thái
         for m in sort_by_id(self.monsters):
+            spec = species_dict.get(m["kind"], {})
+            p_speed = spec.get("patrol_speed", 1.0)
+            c_speed = spec.get("chase_speed", 3.0)
+            det_r = spec.get("detect_radius", 10.0)
+            exit_r = spec.get("exit_radius", 16.0)
+            d_min, d_max = spec.get("depths", [10.0, 30.0])
+            r_dist = spec.get("recoil_dist", 2.0)
+            r_ticks = spec.get("recoil_ticks", 60)
+
             if m["state"] == "recoil":
                 r_dir = m["recoil_dir"] or [1.0, 0.0]
-                m["pos"][0] += r_dir[0] * (2.0 / 60.0)
-                m["pos"][1] += r_dir[1] * (2.0 / 60.0)
+                m["pos"][0] += r_dir[0] * (r_dist / r_ticks)
+                m["pos"][1] += r_dir[1] * (r_dist / r_ticks)
                 m["pos"][0] = max(0.0, min(100.0, m["pos"][0]))
-                m["pos"][1] = max(10.0, min(30.0, m["pos"][1]))
+                m["pos"][1] = max(d_min, min(d_max, m["pos"][1]))
                 m["state_ticks_left"] -= 1
                 if m["state_ticks_left"] <= 0:
                     m["state"] = "patrol"
@@ -289,32 +302,32 @@ class GatherSim:
 
             elif m["state"] == "chase":
                 dist_p = math.dist(m["pos"], self.pos)
-                if dist_p > 16.0 or self.pos[1] < 10.0:
+                if dist_p > exit_r or self.pos[1] < d_min:
                     m["state"] = "patrol"
                 else:
                     if dist_p > 0:
                         ux = (self.pos[0] - m["pos"][0]) / dist_p
                         ud = (self.pos[1] - m["pos"][1]) / dist_p
-                        m["pos"][0] += ux * (3.0 / 60.0)
-                        m["pos"][1] += ud * (3.0 / 60.0)
+                        m["pos"][0] += ux * (c_speed / TICK)
+                        m["pos"][1] += ud * (c_speed / TICK)
                         m["pos"][0] = max(0.0, min(100.0, m["pos"][0]))
-                        m["pos"][1] = max(10.0, min(30.0, m["pos"][1]))
+                        m["pos"][1] = max(d_min, min(d_max, m["pos"][1]))
 
             if m["state"] == "patrol":
-                if self.pos[1] >= 10.0 and math.dist(m["pos"], self.pos) <= 10.0:
+                if self.pos[1] >= d_min and math.dist(m["pos"], self.pos) <= det_r:
                     m["state"] = "chase"
                     dist_p = math.dist(m["pos"], self.pos)
                     if dist_p > 0:
                         ux = (self.pos[0] - m["pos"][0]) / dist_p
                         ud = (self.pos[1] - m["pos"][1]) / dist_p
-                        m["pos"][0] += ux * (3.0 / 60.0)
-                        m["pos"][1] += ud * (3.0 / 60.0)
+                        m["pos"][0] += ux * (c_speed / TICK)
+                        m["pos"][1] += ud * (c_speed / TICK)
                         m["pos"][0] = max(0.0, min(100.0, m["pos"][0]))
-                        m["pos"][1] = max(10.0, min(30.0, m["pos"][1]))
+                        m["pos"][1] = max(d_min, min(d_max, m["pos"][1]))
                 else:
                     target_wp = m["waypoints"][m["target_idx"]]
                     dist_wp = math.dist(m["pos"], target_wp)
-                    step_dist = 1.0 / 60.0
+                    step_dist = p_speed / TICK
                     if dist_wp <= step_dist:
                         m["pos"] = list(target_wp)
                         m["target_idx"] = 1 - m["target_idx"]
@@ -324,19 +337,26 @@ class GatherSim:
                         m["pos"][0] += ux * step_dist
                         m["pos"][1] += ud * step_dist
                     m["pos"][0] = max(0.0, min(100.0, m["pos"][0]))
-                    m["pos"][1] = max(10.0, min(30.0, m["pos"][1]))
+                    m["pos"][1] = max(d_min, min(d_max, m["pos"][1]))
 
         # 2. Xét va chạm (chỉ khi hết bất tử và người chơi ở d >= 10)
-        if self.invuln_ticks == 0 and self.pos[1] >= 10.0:
-            candidates = [m for m in self.monsters if m["state"] != "recoil" and m["state"] != "stunned" and math.dist(self.pos, m["pos"]) <= 1.5]
+        hit_radius = 1.5
+        first_spec = next(iter(species_dict.values()), {}) if species_dict else {}
+        hit_radius = first_spec.get("hit_radius", 1.5)
+        spec_d_min = first_spec.get("depths", [10.0, 30.0])[0]
+
+        if self.invuln_ticks == 0 and self.pos[1] >= spec_d_min:
+            candidates = [m for m in self.monsters if m["state"] != "recoil" and m["state"] != "stunned" and math.dist(self.pos, m["pos"]) <= hit_radius]
             if candidates:
                 target_m = min(candidates, key=lambda m: (math.dist(self.pos, m["pos"]), id_key(m["id"])))
+                t_spec = species_dict.get(target_m["kind"], {})
                 self.hp -= 1
-                lost_count = len(self.hold) // 2
+                loss_ratio = mo_cfg.get("loss_ratio", 0.5)
+                lost_count = math.floor(len(self.hold) * loss_ratio)
                 lost = []
                 for _ in range(lost_count):
                     lost.append(self.hold.pop())
-                self.invuln_ticks = 90
+                self.invuln_ticks = mo_cfg.get("invuln_ticks", 90)
                 events.append(("monster_hit", {"monster_id": target_m["id"], "hp": self.hp, "lost": lost, "pos": list(self.pos)}))
 
                 # Đặt recoil cho quái gây hit
@@ -346,7 +366,7 @@ class GatherSim:
                 else:
                     r_dir = [(target_m["pos"][0] - self.pos[0]) / dist_m, (target_m["pos"][1] - self.pos[1]) / dist_m]
                 target_m["state"] = "recoil"
-                target_m["state_ticks_left"] = 60
+                target_m["state_ticks_left"] = t_spec.get("recoil_ticks", 60)
                 target_m["recoil_dir"] = r_dir
 
                 if self.hp <= 0:
@@ -404,14 +424,18 @@ class GatherSim:
         if len(self.fish) >= max_fish:
             return
 
-        # Tìm các điểm sinh hợp lệ cách mọi đàn đang sống > 1.0 m
+        sp_x = self.t.get("fish_spawn_x", DEFAULT_SPAWN_X)
+        sp_d = self.t.get("fish_spawn_depths", DEFAULT_SPAWN_DEPTHS)
+        clearance = float(self.t.get("fish_spawn_clearance", 1.0))
+
+        # Tìm các điểm sinh hợp lệ cách mọi đàn đang sống > clearance
         valid_by_species = {}
-        for sp, d_list in SPAWN_DEPTHS.items():
+        for sp, d_list in sp_d.items():
             valid_pts = []
-            for x in SPAWN_X:
+            for x in sp_x:
                 for d in d_list:
-                    pt = [x, d]
-                    if all(math.dist(pt, f["pos"]) > 1.0 for f in self.fish):
+                    pt = [float(x), float(d)]
+                    if all(math.dist(pt, f["pos"]) > clearance for f in self.fish):
                         valid_pts.append(pt)
             if valid_pts:
                 valid_by_species[sp] = valid_pts
@@ -420,9 +444,9 @@ class GatherSim:
             return
 
         # Chọn loài theo trọng số
-        weights_map = self.t.get("fish_weights", {"ca_linh": 0.4, "ca_loc": 0.3, "ca_keo": 0.3})
+        weights_map = self.t.get("fish_weights", {"ca_linh": 40, "ca_loc": 30, "ca_keo": 30})
         avail_species = list(valid_by_species.keys())
-        raw_weights = [weights_map.get(sp, 0.33) for sp in avail_species]
+        raw_weights = [weights_map.get(sp, 30) for sp in avail_species]
         total_w = sum(raw_weights)
         norm_weights = [w / total_w for w in raw_weights]
 
