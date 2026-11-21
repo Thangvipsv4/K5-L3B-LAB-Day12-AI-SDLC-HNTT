@@ -249,3 +249,14 @@ def validate_tuning(t):
             _int_between(f"menu.{dish_id}.recipe.{k}", v, 1, 100)
     _validate_day_plan(t.get("day_plan"), menu)
     _validate_shop(t.get("shop"))
+    # Phase 3 is additive until gather/quan finish their v1.2 interfaces.
+    # If a v1.2 contract enables this block, validate its shared tuning here.
+    if "freshness" in t:
+        f = t["freshness"]
+        keys = {"initial", "gather_decay_per_s", "quan_decay_per_s", "spoiled_below"}
+        if not isinstance(f, dict) or set(f) != keys:
+            raise BadInput(f"tuning.freshness phải có đúng các khóa {sorted(keys)}")
+        expected = {"initial": 100, "gather_decay_per_s": 0.5,
+                    "quan_decay_per_s": 0.25, "spoiled_below": 30}
+        if f != expected:
+            raise BadInput("tuning.freshness phải dùng initial=100, gather=0.5/s, quan=0.25/s, spoiled_below=30")
