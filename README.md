@@ -54,3 +54,13 @@ Hết giờ mỗi phase thì gắn tag rồi đi tiếp; chỗ chưa xong ghi tr
 
 - Dùng AI thoải mái; **không sao chép repo của nhóm khác**; bằng chứng phải thật.
 - Nhân vật, bối cảnh là bản gốc của lab; asset ngoài chỉ dùng CC0/CC-BY/MIT hoặc tự tạo, ghi nguồn trong `CREDITS.md`. Không commit API key, token, `.env`.
+
+## Sáng tạo của nhóm (HNTT)
+
+> Mọi phần dưới đây chỉ nằm ở client trình duyệt (`chonoi/web/index.html`): **không đổi luật, không chạy ở headless**, nên không ảnh hưởng Test Contract.
+
+| Phase | Sáng tạo | Ở đâu | Người |
+|---|---|---|---|
+| 1 | Thông báo sự kiện (toast) tiếng Việt có biểu tượng cho mọi event PRD (`dive`, `choke`, `faint`, `hold_full`, `paid`, `customer_left`…) | `index.html` → `EVENT_MSG`, `collectToasts`, `drawToasts` | Tú |
+| 1 | Cảnh báo ngạt: viền đỏ nhấp nháy + đếm ngược tới lần mất Máu kế tiếp; nhắc khi oxy < 25% | `index.html` → `drawGather` | Tú |
+| 1 | Bảng "Đơn gọi" buổi tối: tên món tiếng Việt, trạng thái đơn, thanh kiên nhẫn đổi màu xanh → cam → đỏ | `index.html` → `drawQuan` | Tú |
