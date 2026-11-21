@@ -1,11 +1,18 @@
 """Cửa sổ chơi trực tiếp bằng TRÌNH DUYỆT, chỉ dùng thư viện chuẩn Python.
 
-    python3 -m chonoi.live --mode gather|quan [--seed N] [--port 8000]
+    python3 -m chonoi.live --mode gather|quan|day [--days N] [--seed N] [--port 8000]
 
-Máy chủ HTTP nhỏ (ThreadingHTTPServer) phục vụ `chonoi/web/index.html` và hai API:
-    GET  /state  -> snapshot JSON hiện tại (cùng trường như dòng snapshot của headless) + `meta` + `events`
-    POST /input  -> {"move": [a, b], "interact": bool, "catch": bool}   (trạng thái phím đang giữ)
+Máy chủ HTTP nhỏ (ThreadingHTTPServer) phục vụ `chonoi/web/index.html` và các API:
+    GET  /state  -> snapshot JSON hiện tại (cùng trường như dòng snapshot của headless)
+                    + `meta` (tuning của pha) + `cfg` (menu, shop, day_plan) + `events` + `ui_hold`, `ui_paused`, `run_id`
+    POST /input  -> {"move": [a, b], "interact": bool, "catch": bool,
+                     "pause": bool, "shop_done": bool, "buy": "oxygen"|"hp"}   (v1.1)
+    POST /pause  -> bật/tắt menu tạm dừng (gửi cạnh `pause` vào sim; sim chưa hỗ trợ pause thì giữ sim đứng)
+    POST /hold   -> {"hold": bool}: client đang ở màn Menu/DayIntro/EveningIntro/DayResult thì sim đứng
     POST /restart -> chơi lại từ đầu (cùng seed, cùng scenario)
+    GET  /mock.json -> snapshot mẫu docs/contracts/snapshot.day.sample.json (xem trước UI bằng ?mock=<màn>)
+
+`hold` và pause dự phòng CHỈ có ở cửa sổ chơi: sim không bước, không có tick nào bị thay đổi, headless không liên quan.
 
 Mô phỏng chạy 60 tick/s trong một luồng nền, dùng CÙNG lớp sim như headless (qua `runner.Session`).
 Client chỉ ĐỌC snapshot và tự bỏ qua trường chưa có, nên luật do nhóm viết thêm trường nào cũng không vỡ.
@@ -32,6 +39,8 @@ WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 TICK_S = 1.0 / 60.0
 MAX_BODY = 4096
 RECENT_EVENTS = 40
+MOCK_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "docs", "contracts", "snapshot.day.sample.json")
 
 
 class LiveGame:
@@ -45,6 +54,8 @@ class LiveGame:
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread = None
+        self.hold = False          # client đang ở màn không chơi (menu/intro/kết quả)
+        self.run_id = 0            # tăng mỗi lần chơi lại, để client biết snapshot thuộc lượt nào
         self._reset()
 
     def _reset(self):
@@ -53,6 +64,11 @@ class LiveGame:
         self.events = []
         self._saved = False
         self.error = None
+        self.ui_paused = False
+
+    def _sim_pauses(self) -> bool:
+        """Sim đã nhận nút `pause` (Test Contract v1.1) chưa. Chưa thì cửa sổ chơi tự giữ sim đứng."""
+        return "pause" in getattr(self.inputs, "_buttons", ())
 
     # --- luồng nền ----------------------------------------------------------------
     def start(self):
@@ -84,7 +100,7 @@ class LiveGame:
 
     def _tick_once(self):
         s = self.session
-        if s.done:
+        if s.done or self.hold or (self.ui_paused and not self._sim_pauses()):
             return
         for row in s.step(self.inputs.advance()):
             self.events.append(row)
@@ -101,7 +117,12 @@ class LiveGame:
     def state_json(self) -> bytes:
         with self._lock:
             snap = self.session.snapshot()
-            snap["meta"] = self.tuning[self.mode]
+            phase = snap.get("phase", self.mode)
+            snap["meta"] = self.tuning.get(phase, {}) if phase in ("gather", "quan") else {}
+            snap["cfg"] = {k: self.tuning.get(k) for k in ("menu", "shop", "day_plan")}
+            snap["ui_hold"] = self.hold   # KHÔNG đặt "hold": trùng giỏ của gather
+            snap["run_id"] = self.run_id
+            snap["ui_paused"] = self.ui_paused
             snap["events"] = list(self.events)
             snap["finished"] = self.session.done
             snap["reason"] = self.session.sim.reason if self.session.done else None
@@ -116,16 +137,35 @@ class LiveGame:
             if not ok:
                 raise ValueError("move phải là [a, b] trong [-1, 1]")
         buttons = {}
-        for b in ("interact", "catch"):
+        for b in ("interact", "catch", "pause", "shop_done"):
             if b in body:
                 if not isinstance(body[b], bool):
                     raise ValueError(f"{b} phải là boolean")
                 buttons[b] = body[b]
+        buy = body.get("buy")
+        if buy is not None and (not isinstance(buy, str) or not buy):
+            raise ValueError("buy phải là chuỗi khác rỗng")
         with self._lock:
-            self.inputs.set(move, **buttons)
+            self.inputs.set(move, **buttons)   # nút sim chưa biết thì LiveInputs bỏ qua
+            if buy is not None and hasattr(self.inputs, "set_buy"):
+                self.inputs.set_buy(buy)       # Thắng thêm set_buy khi làm Shop
+
+    def toggle_pause(self):
+        with self._lock:
+            if self.session.done:
+                return
+            self.ui_paused = not self.ui_paused
+            if self._sim_pauses():             # một cạnh lên `pause` cho sim
+                self.inputs.set(None, pause=True)
+                self.inputs.set(None, pause=False)
+
+    def set_hold(self, hold: bool):
+        with self._lock:
+            self.hold = hold
 
     def restart(self):
         with self._lock:
+            self.run_id += 1
             self._reset()
 
 
@@ -148,6 +188,12 @@ class _Handler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         if path == "/state":
             self._send(200, self.game.state_json())
+        elif path == "/mock.json":
+            try:
+                with open(MOCK_PATH, "rb") as f:
+                    self._send(200, f.read())
+            except OSError:
+                self._send(404, b'{"error":"thieu snapshot mau"}')
         elif path in ("/", "/index.html"):
             try:
                 with open(os.path.join(WEB_DIR, "index.html"), "rb") as f:
@@ -175,6 +221,13 @@ class _Handler(BaseHTTPRequestHandler):
                 self.game.set_input(body)
             elif path == "/restart":
                 self.game.restart()
+            elif path == "/pause":
+                self.game.toggle_pause()
+            elif path == "/hold":
+                body = json.loads(raw.decode("utf-8") or "{}")
+                if not isinstance(body, dict) or not isinstance(body.get("hold"), bool):
+                    raise ValueError("hold phải là boolean")
+                self.game.set_hold(body["hold"])
             else:
                 self._send(404, b'{"error":"khong co"}')
                 return
@@ -215,7 +268,8 @@ class LiveServer:
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="chonoi.live", description="Chơi trực tiếp trên trình duyệt (starter).")
-    p.add_argument("--mode", required=True, choices=["gather", "quan"])
+    p.add_argument("--mode", required=True, choices=["gather", "quan", "day"])
+    p.add_argument("--days", type=int, default=1, help="chỉ với day: số Ngày 1..5")
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--port", type=int, default=8000, help="0 = cổng ngẫu nhiên")
     p.add_argument("--host", default="127.0.0.1")
@@ -228,6 +282,13 @@ def main(argv=None) -> int:
             raise BadInput("--inventory chỉ dùng với quan")
         if a.inventory_out and a.mode != "gather":
             raise BadInput("--inventory-out chỉ dùng với gather")
+        if a.mode == "day":
+            try:
+                import chonoi.sim.day  # noqa: F401  (Thắng, lát 4a)
+            except ImportError:
+                raise BadInput("--mode day cần chonoi/sim/day.py (chưa có). Xem thử UI: mở /?mock=gather|quan|shop|summary")
+            if not 1 <= a.days <= 5:
+                raise BadInput("--days phải trong 1..5")
         tuning = load_contract()["tuning"]
         scenario = load_scenario(a.scenario, a.mode, tuning)
         inventory = read_inventory(a.inventory) if a.inventory else None
