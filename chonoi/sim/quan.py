@@ -21,12 +21,31 @@ class QuanSim:
     mode = "quan"
     phase = "quan"
 
-    def __init__(self, tuning, scenario, streams, ids, inventory=None):
+    def __init__(self, tuning, scenario, streams, ids, inventory=None, day_plan=None):
         t = tuning["quan"]
         self.t = t
         self.menu = tuning["menu"]
+        self.score_mult = tuning.get("score", {}).get("reputation_multiplier", 100)
         self.rng = streams
         self.ids = ids
+
+        raw_plan = day_plan if day_plan is not None else scenario.get("day_plan")
+        if isinstance(raw_plan, dict) and "dishes" in raw_plan:
+            raw_plan = raw_plan["dishes"]
+        if isinstance(raw_plan, dict):
+            allowed_keys = [k for k, cnt in raw_plan.items() if cnt > 0]
+        elif isinstance(raw_plan, (list, tuple)):
+            allowed_keys = list(raw_plan)
+        elif raw_plan is None:
+            allowed_keys = None
+        else:
+            raise BadInput("day_plan không hợp lệ")
+
+        if allowed_keys is not None:
+            bad = [d for d in allowed_keys if d not in self.menu]
+            if bad:
+                raise BadInput(f"day_plan chứa món không có trong menu: {bad}")
+        self.day_plan = allowed_keys
 
         p = scenario.get("player", {})
         self.pos = [float(c) for c in p.get("pos", t["start_pos"])]
@@ -368,6 +387,9 @@ class QuanSim:
                        for s in self.stoves],
             "tables": [{"id": tb["id"], "pos": tb["pos"], "customer_id": occupied.get(tb["id"])} for tb in self.tables],
             "customers": sort_by_id(self.customers),
+            "earned": self.earned,
+            "reputation": self.reputation,
+            "day_plan": self.day_plan,
         }
 
     def step(self, inp):
@@ -447,12 +469,14 @@ class QuanSim:
         if self.time_left_ticks <= 0:
             self.done = True
             self.reason = "time"
+            score = self.earned + self.score_mult * math.floor(self.reputation)
             events.append(("quan_end", {
                 "reason": "time",
                 "money": self.money,
                 "earned": self.earned,
                 "shift_earned": self.shift_earned,
                 "reputation": self.reputation,
+                "score": score,
             }))
             return events
 
@@ -466,8 +490,9 @@ class QuanSim:
             if free_tables:
                 table = free_tables[0]
                 avail = self._available_stock()
+                allowed_dishes = self.day_plan if self.day_plan is not None else self.menu.keys()
                 cookable = [
-                    dish_id for dish_id in sorted(self.menu)
+                    dish_id for dish_id in sorted(set(allowed_dishes))
                     if all(avail.get(k, 0) >= qty for k, qty in self.menu[dish_id]["recipe"].items())
                 ]
                 if not cookable:
