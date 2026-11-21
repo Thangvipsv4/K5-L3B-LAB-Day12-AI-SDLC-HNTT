@@ -64,3 +64,5 @@ Hết giờ mỗi phase thì gắn tag rồi đi tiếp; chỗ chưa xong ghi tr
 | 1 | Thông báo sự kiện (toast) tiếng Việt có biểu tượng cho mọi event PRD (`dive`, `choke`, `faint`, `hold_full`, `paid`, `customer_left`…) | `index.html` → `EVENT_MSG`, `collectToasts`, `drawToasts` | Tú |
 | 1 | Cảnh báo ngạt: viền đỏ nhấp nháy + đếm ngược tới lần mất Máu kế tiếp; nhắc khi oxy < 25% | `index.html` → `drawGather` | Tú |
 | 1 | Bảng "Đơn gọi" buổi tối: tên món tiếng Việt, trạng thái đơn, thanh kiên nhẫn đổi màu xanh → cam → đỏ | `index.html` → `drawQuan` | Tú |
+| 1 | Đồ họa chợ nổi: bình minh trên sông, rặng dừa nước, tia nắng, rong đáy, cá quẫy đuôi, hoa súng/điên điển, ghe ở bến, bọt nước khi lặn; tối là sàn ghe ván gỗ, dây đèn lồng, bếp cà ràng có lửa/hơi, khách đội nón lá với vòng kiên nhẫn | `index.html` → `drawGather`, `drawQuan` | Tú |
+| 1 | HUD khung gỗ: tim, sao uy tín, xu tiền, ô giỏ có hình nguyên liệu, bảng Đơn gọi, phím tắt dạng keycap; `L` bật nhật ký sự kiện + id (cho QA) | `index.html` | Tú |

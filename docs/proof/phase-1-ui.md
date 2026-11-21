@@ -26,6 +26,13 @@ Ngày 2026-11-21 · commit `e19d24f`, `d435a93`.
 3. `PYTHONUTF8=1 python -m chonoi.live --mode quan --port 8765` → `GET /state` trả snapshot, `GET /` trả HUD mới.
 4. Smoke test: `PYTHONPATH=tests:. python3 -m unittest discover -s tests` → **32 test, 31 pass, 1 fail** `test_team_check.test_template_is_rejected` (fail có sẵn trước thay đổi: test kỳ vọng TEAM.md còn là bản mẫu; nhóm đã điền). Báo Thắng (QA).
 
+## Làm lại đồ họa (phase 1, lần 2)
+Ảnh chụp bằng Edge headless:
+- Mô phỏng giả (chỉ để xem giao diện): ![sáng](img/ui-gather.png) ![hết oxy](img/ui-choke.png) ![quán](img/ui-quan.png)
+- Server thật `python -m chonoi.live` (luật nhóm lúc chụp): ![sáng thật](img/ui-real-gather.png) ![quán thật](img/ui-real-quan.png)
+- Bản xem trước chơi được (mô phỏng giả): https://claude.ai/artifact/RPZrK8PoPM6m9zk1f6L91s
+- `node --check` OK; smoke test vẫn 31/32 (fail có sẵn `test_template_is_rejected`).
+
 ## Còn mở
 - Kiểm lại trên trình duyệt khi lát 1–4 của Hải/Nam đã push (sự kiện thật, `reserved` thật).
-- Xác nhận nghĩa `zero_oxy_ticks` với Hải để đếm ngược choke đúng.
+- ~~Xác nhận nghĩa `zero_oxy_ticks`~~: code của Hải reset về 0 sau mỗi `choke` → đếm ngược đúng.
