@@ -16,6 +16,7 @@ import re
 import sys
 
 HANDLE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$")
+PLACEHOLDER = re.compile(r"(?:<[^>]+>|\b(?:tên|name|handle|module|vai|role|người|person)(?:\s*\d*)?\b|\.\.\.|…)", re.IGNORECASE)
 
 
 def _cells(line):
@@ -52,13 +53,13 @@ def validate(members, team_size, actor=None, event=None):
     handles = []
     for i, m in enumerate(members, 1):
         h = m["handle"]
-        if not h or "…" in h or h.lower().startswith("handle") or not HANDLE.match(h):
+        if not h or PLACEHOLDER.search(h) or not HANDLE.match(h):
             errs.append(f"thành viên #{i}: GitHub handle chưa điền hoặc không hợp lệ ({h!r})")
         else:
             handles.append(h.lower())
-        if not m["name"] or "…" in m["name"]:
+        if not m["name"] or PLACEHOLDER.search(m["name"]):
             errs.append(f"thành viên #{i}: thiếu tên")
-        if not m["module"] or "…" in m["module"]:
+        if not m["module"] or PLACEHOLDER.search(m["module"]):
             errs.append(f"thành viên #{i}: thiếu module chính")
     if len(set(handles)) != len(handles):
         errs.append("có GitHub handle bị trùng")

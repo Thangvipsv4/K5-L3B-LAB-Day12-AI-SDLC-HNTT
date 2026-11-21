@@ -16,6 +16,15 @@ GOOD = """# TEAM
 | Dũng | dung-pham | qa | Scrum | ui |
 """
 
+TEMPLATE = """# TEAM
+| Thành viên | GitHub handle | Module chính | Vai quy trình | Người dự phòng cho |
+|---|---|---|---|---|
+| Tên 1 | <github-handle> | <module> | <vai> | <người> |
+| Tên 2 | <github-handle> | <module> | <vai> | <người> |
+| Tên 3 | <github-handle> | <module> | <vai> | <người> |
+| Tên 4 | <github-handle> | <module> | <vai> | <người> |
+"""
+
 
 class TeamCheck(unittest.TestCase):
     def test_good(self):
@@ -24,9 +33,10 @@ class TeamCheck(unittest.TestCase):
         self.assertEqual(check_team.validate(m, 4, actor="an-nguyen", event="pull_request"), [])
 
     def test_template_is_rejected(self):
-        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "TEAM.md"), encoding="utf-8") as f:
-            m = check_team.parse_team(f.read())
-        self.assertTrue(check_team.validate(m, 4))
+        m = check_team.parse_team(TEMPLATE)
+        errors = check_team.validate(m, 4)
+        self.assertTrue(errors)
+        self.assertTrue(any("handle" in error for error in errors))
 
     def test_wrong_size_duplicate_and_outsider(self):
         m = check_team.parse_team(GOOD)
