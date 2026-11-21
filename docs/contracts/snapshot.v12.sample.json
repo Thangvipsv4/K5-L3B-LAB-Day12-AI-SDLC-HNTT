@@ -1,0 +1,245 @@
+{
+ "_ghi_chu": "Snapshot mẫu v1.2 (docs/contracts/README.md mục 7) cho HUD làm song song. fresh < 30 là ươn.",
+ "gather": {
+  "type": "snapshot",
+  "tick": 3600,
+  "sim_tick": 3600,
+  "mode": "day",
+  "phase": "gather",
+  "phase_tick": 3600,
+  "state": "playing",
+  "time_left_ticks": 7200,
+  "money": 200,
+  "earned": 320,
+  "reputation": 3.2,
+  "score": 620,
+  "day": 2,
+  "day_plan": {
+   "dishes": {
+    "ca_loc_nuong_trui": 2,
+    "lau_ca_linh_dien_dien": 2
+   },
+   "ingredients": {
+    "bong_dien_dien": 2,
+    "ca_linh": 6,
+    "ca_loc": 2
+   }
+  },
+  "upgrades": {},
+  "active_upgrades": {},
+  "player": {
+   "pos": [
+    40.0,
+    6.0
+   ],
+   "vel": [
+    0,
+    0
+   ],
+   "heading_deg": 0,
+   "oxygen_ticks": 1200,
+   "oxygen_max_ticks": 1800,
+   "hp": 3,
+   "hp_max": 3,
+   "zero_oxy_ticks": 0,
+   "invuln_ticks": 0,
+   "catch_cd_ticks": 0,
+   "at_surface": false
+  },
+  "hold": [
+   {
+    "id": "I1",
+    "kind": "bong_dien_dien",
+    "fresh": 60.0
+   },
+   {
+    "id": "I2",
+    "kind": "ca_linh",
+    "fresh": 45.5
+   },
+   {
+    "id": "I3",
+    "kind": "ca_linh",
+    "fresh": 45.5
+   },
+   {
+    "id": "I4",
+    "kind": "ca_linh",
+    "fresh": 45.5
+   },
+   {
+    "id": "I5",
+    "kind": "ca_loc",
+    "fresh": 29.5
+   },
+   {
+    "id": "I6",
+    "kind": "bong_dien_dien",
+    "fresh": 98.0
+   }
+  ],
+  "hold_count": 6,
+  "hold_capacity": 12,
+  "nodes": [],
+  "fish": [],
+  "monsters": []
+ },
+ "quan": {
+  "type": "snapshot",
+  "tick": 11000,
+  "sim_tick": 11000,
+  "mode": "day",
+  "phase": "quan",
+  "phase_tick": 200,
+  "state": "playing",
+  "time_left_ticks": 10600,
+  "money": 200,
+  "earned": 320,
+  "reputation": 3.2,
+  "score": 620,
+  "day": 2,
+  "day_plan": {
+   "dishes": {
+    "ca_loc_nuong_trui": 2,
+    "lau_ca_linh_dien_dien": 2
+   },
+   "ingredients": {
+    "bong_dien_dien": 2,
+    "ca_linh": 6,
+    "ca_loc": 2
+   }
+  },
+  "upgrades": {},
+  "active_upgrades": {},
+  "player": {
+   "pos": [
+    4.0,
+    7.0
+   ]
+  },
+  "stock": [
+   {
+    "id": "I1",
+    "kind": "bong_dien_dien",
+    "fresh": 59.2
+   },
+   {
+    "id": "I2",
+    "kind": "ca_linh",
+    "fresh": 44.7
+   },
+   {
+    "id": "I3",
+    "kind": "ca_linh",
+    "fresh": 44.7
+   },
+   {
+    "id": "I4",
+    "kind": "ca_linh",
+    "fresh": 44.7
+   },
+   {
+    "id": "I5",
+    "kind": "ca_loc",
+    "fresh": 28.7
+   },
+   {
+    "id": "I6",
+    "kind": "bong_dien_dien",
+    "fresh": 97.2
+   }
+  ],
+  "hand": null,
+  "stoves": [
+   {
+    "id": "B1",
+    "pos": [
+     2,
+     8
+    ],
+    "state": "idle",
+    "dish": null,
+    "cook_ticks_left": 0,
+    "ready_ticks": 0
+   },
+   {
+    "id": "B2",
+    "pos": [
+     5,
+     8
+    ],
+    "state": "idle",
+    "dish": null,
+    "cook_ticks_left": 0,
+    "ready_ticks": 0
+   }
+  ],
+  "tables": [
+   {
+    "id": "T1",
+    "pos": [
+     9,
+     2
+    ],
+    "customer_id": "C1"
+   },
+   {
+    "id": "T2",
+    "pos": [
+     13,
+     2
+    ],
+    "customer_id": "C2"
+   },
+   {
+    "id": "T3",
+    "pos": [
+     9,
+     6
+    ],
+    "customer_id": null
+   },
+   {
+    "id": "T4",
+    "pos": [
+     13,
+     6
+    ],
+    "customer_id": null
+   }
+  ],
+  "customers": [
+   {
+    "id": "C1",
+    "table_id": "T1",
+    "dish_id": "lau_ca_linh_dien_dien",
+    "state": "waiting",
+    "order_status": "reserved",
+    "order_tick": 120,
+    "patience_ticks_left": 3400,
+    "eat_ticks_left": 0,
+    "reserved": [
+     "I6",
+     "I2",
+     "I3",
+     "I4"
+    ],
+    "base_price": null,
+    "tip": 0
+   },
+   {
+    "id": "C2",
+    "table_id": "T2",
+    "dish_id": "ca_loc_nuong_trui",
+    "state": "waiting",
+    "order_status": "unfulfillable",
+    "order_tick": 150,
+    "patience_ticks_left": 800,
+    "eat_ticks_left": 0,
+    "reserved": [],
+    "base_price": null,
+    "tip": 0
+   }
+  ]
+ }
+}

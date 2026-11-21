@@ -152,3 +152,64 @@ Dòng `end` của mode `day` có thêm `days_completed`. Nếu chạy đủ số
 - Test `test_gather_snapshot_has_gather_fields` đổi từ 6 sang `fish_initial` đàn, vì luật v1.1 đổi.
 - `--mode day` và `--days` vẫn báo mã 2 cho tới khi Thắng làm `day.py`.
 - `QuanSim` chưa có `plan_dishes`/`reputation` (Nam). Lớp `ShopSim`/`DaySim` chưa có (Thắng).
+
+---
+
+## 7. **v1.2 (Phase 3) — Kho cá thể và độ tươi** · chốt phút 0–7
+
+Phân tích tác động, thứ tự tích hợp và người nhận: [docs/plan/phase-3.md](../plan/phase-3.md).
+**`main` giữ v1.1 cho tới phút 25.** Thắng bật `"1.2"` trong một commit kèm sửa test.
+
+### 7.1. Cá thể nguyên liệu
+
+```json
+{"items": [{"id": "I1", "kind": "ca_linh", "fresh": 100}, {"id": "I2", "kind": "ca_loc", "fresh": 97.5}]}
+```
+
+| Trường | Luật | Sai thì |
+|---|---|---|
+| `items` | khóa gốc duy nhất; mảng; rỗng là `{"items": []}` | mã 2 (kể cả file kho đếm `{"items": {...}}` cũ) |
+| `id` | chuỗi khác rỗng, **duy nhất trên mọi nơi chứa** (giỏ, kho, món). Cấp `ids.new("I")` theo thứ tự vào giỏ, không cấp lại | mã 2 nếu trùng |
+| `kind` | một trong 6 nguyên liệu (`inventory.KINDS`) | mã 2 |
+| `fresh` | số thực hữu hạn trong [0, 100] | mã 2 |
+
+Mẫu: [`inventory.v12.sample.json`](inventory.v12.sample.json).
+
+### 7.2. Độ tươi — biểu diễn chung (bắt buộc dùng adapter)
+
+- Bên trong sim dùng `u = fresh × 240` (số nguyên). `FRESH_U = 24000`, `SPOIL_U = 7200`.
+- Hao mỗi tick: **gather `-2`** (ở đầu bước), **quán `-1`** (bước 2, gồm cả hàng đang giữ chỗ). Kẹp ở 0. Pause thì không hao. Món đã nấu không hao. Hàng ở Shop không hao.
+- **Ươn** khi `u < SPOIL_U`. Sự kiện `spoiled` phát đúng một lần khi đi từ `≥ 7200` xuống `< 7200`. Nhiều cá thể cùng tick thì phát theo id.
+- Hàng mới: `u = 24000`, bắt đầu hao **từ bước sau**.
+- Adapter (`chonoi/inventory.py`, Thắng): `to_units(fresh)` (đọc chính xác, xem plan D3), `to_fresh(u)`, `item_out(it)` trả `{"id","kind","fresh"}` và **không bao giờ xuất `u`**.
+
+### 7.3. Xuất ra (snapshot, event, file)
+
+| Nơi | Dạng | Thứ tự |
+|---|---|---|
+| file kho, `gather_end.data.inventory.items` | mảng cá thể | theo id |
+| snapshot gather `hold` | mảng cá thể (`hold_count` giữ nguyên) | thứ tự vào giỏ (cuối = mới nhất) |
+| snapshot quán / Shop `stock` | mảng cá thể, **gồm cả hàng ươn** | theo id |
+| `customers[].reserved` | mảng id, ví dụ `["I1","I3"]` | kind rồi id |
+| `cook_started.data.items` | mảng cá thể đã tiêu | kind rồi id |
+| `monster_hit.data.lost`, `faint.data.lost` | mảng cá thể | LIFO (mất trước đứng trước) |
+| `spoiled` (mới) | `{"item_id","kind","location":"hold"|"stock"}` | theo id |
+
+`cook_started.data.base_price` = `floor(giá niêm yết × trung bình fresh của các cá thể tiêu / 100)`. Boa = `floor(base_price × 0.2)` nếu đủ điều kiện.
+
+### 7.4. Scenario v1.2
+
+- `gather.hold`, `quan.stock` là mảng cá thể. `customers[].reserved` là mảng id, phải trỏ tới cá thể **chưa ươn** trong `stock`, đủ theo công thức, không trùng với đơn khác. Bỏ `reserved` thì sim tự cấp theo `order_tick` rồi id bàn.
+- Mode `day`: Ngày 1 giữ id từ fixture `gather.hold`. Từ Ngày 2 cấp id mới theo thứ tự mảng, với `kind` và `fresh` ban đầu.
+- Mâu thuẫn bất kỳ thì mã 2.
+
+### 7.5. Giao diện giữa các lát (không đổi chữ ký hàm, chỉ đổi kiểu dữ liệu)
+
+```python
+GatherSim.inventory_items() -> list[dict]            # [{"id","kind","fresh"}] theo id   (Hải)
+QuanSim(..., inventory=list[dict] | None)            # nhận nguyên cả hàng ươn; ids.reserve(id)  (Nam)
+ShopSim(..., stock=list[dict])                       # không hao                          (Thắng)
+DaySim: bàn giao list cùng tick; fainted -> []       #                                    (Thắng)
+```
+
+Snapshot mẫu cho HUD: [`snapshot.v12.sample.json`](snapshot.v12.sample.json).
