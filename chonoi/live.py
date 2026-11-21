@@ -10,6 +10,7 @@ Máy chủ HTTP nhỏ (ThreadingHTTPServer) phục vụ `chonoi/web/index.html` 
     POST /pause  -> bật/tắt menu tạm dừng (gửi cạnh `pause` vào sim; sim chưa hỗ trợ pause thì giữ sim đứng)
     POST /hold   -> {"hold": bool}: client đang ở màn Menu/DayIntro/EveningIntro/DayResult thì sim đứng
     POST /restart -> chơi lại từ đầu (cùng seed, cùng scenario)
+    POST /bench  -> trang ở chế độ ?bench=1 gửi số liệu khung hình về (dùng bởi `python3 -m chonoi.bench`)
     GET  /mock.json -> snapshot mẫu docs/contracts/snapshot.day.sample.json (xem trước UI bằng ?mock=<màn>);
                        /mock.json?v=12 -> snapshot.v12.sample.json (kho cá thể + độ tươi, ?mock=<màn>&v=12)
 
@@ -48,8 +49,9 @@ MOCK_V12_PATH = os.path.join(CONTRACTS_DIR, "snapshot.v12.sample.json")   # kho 
 class LiveGame:
     """Một lượt chơi + luồng nền bước 60 tick/s. Mọi truy cập trạng thái đi qua khóa."""
 
-    def __init__(self, mode, tuning, scenario, seed, inventory=None, inventory_out=None):
+    def __init__(self, mode, tuning, scenario, seed, inventory=None, inventory_out=None, days=1):
         self._args = (mode, tuning, scenario, seed, inventory)
+        self._days = days
         self.mode = mode
         self.tuning = tuning
         self.inventory_out = inventory_out
@@ -58,10 +60,12 @@ class LiveGame:
         self._thread = None
         self.hold = False          # client đang ở màn không chơi (menu/intro/kết quả)
         self.run_id = 0            # tăng mỗi lần chơi lại, để client biết snapshot thuộc lượt nào
+        self.bench_result = None   # kết quả đo FPS do trang gửi về (chonoi.bench)
+        self.bench_done = threading.Event()
         self._reset()
 
     def _reset(self):
-        self.session = Session(*self._args)
+        self.session = Session(*self._args, days=self._days) if self.mode == "day" else Session(*self._args)
         self.inputs = LiveInputs()
         self.events = []
         self._saved = False
@@ -225,6 +229,12 @@ class _Handler(BaseHTTPRequestHandler):
                 self.game.restart()
             elif path == "/pause":
                 self.game.toggle_pause()
+            elif path == "/bench":
+                body = json.loads(raw.decode("utf-8") or "{}")
+                if not isinstance(body, dict):
+                    raise ValueError("bench phải là object")
+                self.game.bench_result = body
+                self.game.bench_done.set()
             elif path == "/hold":
                 body = json.loads(raw.decode("utf-8") or "{}")
                 if not isinstance(body, dict) or not isinstance(body.get("hold"), bool):
@@ -239,13 +249,21 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(200, b'{"ok":true}')
 
 
+class _QuietServer(ThreadingHTTPServer):
+    """Trình duyệt đóng ngang kết nối (tắt tab, bench kết thúc) là chuyện thường: không in traceback."""
+
+    def handle_error(self, request, client_address):
+        if not isinstance(sys.exc_info()[1], (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
+            super().handle_error(request, client_address)
+
+
 class LiveServer:
     """Máy chủ + mô phỏng. port=0 -> cổng ngẫu nhiên (đọc `.port`)."""
 
     def __init__(self, game: LiveGame, host="127.0.0.1", port=8000):
         handler = type("Handler", (_Handler,), {"game": game})
         self.game = game
-        self.httpd = ThreadingHTTPServer((host, port), handler)
+        self.httpd = _QuietServer((host, port), handler)
         self.httpd.daemon_threads = True
         self.host = host
         self.port = self.httpd.server_address[1]
@@ -271,7 +289,7 @@ class LiveServer:
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="chonoi.live", description="Chơi trực tiếp trên trình duyệt (starter).")
     p.add_argument("--mode", required=True, choices=["gather", "quan", "day"])
-    p.add_argument("--days", type=int, default=1, help="chỉ với day: số Ngày 1..5")
+    p.add_argument("--days", type=int, default=5, help="chỉ với day: số Ngày 1..5 (mặc định 5 = trọn game)")
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--port", type=int, default=8000, help="0 = cổng ngẫu nhiên")
     p.add_argument("--host", default="127.0.0.1")
@@ -296,7 +314,7 @@ def main(argv=None) -> int:
         inventory = read_inventory(a.inventory) if a.inventory else None
         if inventory is not None and "stock" in scenario:
             raise BadInput("vừa có quan.stock vừa có --inventory")
-        game = LiveGame(a.mode, tuning, scenario, a.seed, inventory, a.inventory_out)
+        game = LiveGame(a.mode, tuning, scenario, a.seed, inventory, a.inventory_out, days=a.days)
         server = LiveServer(game, a.host, a.port)
     except BadInput as e:
         sys.stderr.write(f"đầu vào sai: {e}\n")

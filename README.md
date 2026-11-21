@@ -13,15 +13,58 @@ Cách làm việc kỹ thuật là **tự do** (push thẳng, nhánh + PR, pair,
 4. **Gắn tag** `phase-1` … `phase-4` đúng hạn; chạy được tại từng tag.
 5. **Ghi chép tối thiểu:** `docs/verification/phase-n.md`, `docs/clarify.md`, `docs/ai-usage-log.md`, `docs/retro.md`, `docs/members/<handle>.md`.
 
-## Bắt đầu nhanh
+## Chơi ngay — 3 lệnh từ bản clone sạch (macOS / Linux)
 
 ```bash
-git clone <fork-của-nhóm> && cd <fork-của-nhóm>
-PYTHONPATH=tests:. python3 -m unittest discover -s tests -v        # smoke test
-python3 -m chonoi.live --mode gather                                # chơi thử trên trình duyệt (tùy chọn)
+git clone https://github.com/Thangvipsv4/K5-L3B-LAB-Day12-AI-SDLC-HNTT.git
+cd K5-L3B-LAB-Day12-AI-SDLC-HNTT
+python3 -m chonoi.live --mode day
 ```
 
-Game cần chế độ **headless** theo Test Contract (`python3 -m chonoi.headless --mode gather|quan …`) để được chạy và chấm tự động. **Công nghệ không ràng buộc**: khung Python trong `chonoi/` chỉ là gợi ý, chi tiết ở [`docs/STARTER.md`](docs/STARTER.md).
+Mở địa chỉ in ra (mặc định <http://127.0.0.1:8000/>), chọn **Chơi**. Một Ngày gồm: DayIntro → lặn (`gather`) → EveningIntro → quán (`quan`) → Kết quả → Shop.
+Muốn chơi riêng một buổi thì thay `--mode day` bằng `--mode gather` hoặc `--mode quan`. Windows dùng `python` thay cho `python3`.
+
+### Yêu cầu môi trường
+
+| Cần | Ghi chú |
+|---|---|
+| **Python 3.10+** | Chỉ dùng thư viện chuẩn, không cần `pip install`. Nhóm chạy 3.11. |
+| **Trình duyệt hiện đại** | Chrome, Edge, Firefox hoặc Safari để chơi. |
+| **Chrome / Chromium / Edge** | Chỉ cần cho lệnh benchmark. Ở chỗ lạ thì đặt `CHONOI_BROWSER=<đường dẫn>`. |
+
+### Điều khiển
+
+| Phím | Buổi sáng (lặn) | Buổi tối (quán) | Màn khác |
+|---|---|---|---|
+| `W A S D` / mũi tên | bơi (S là lặn xuống) | đi lại | ↑ ↓ chọn ở menu |
+| `E` | hái ở mặt nước, cập bến | nấu ở bếp, lấy món, bưng ra bàn | |
+| `Space` | bắt cá (dưới nước) | | Enter/Space: xác nhận, qua intro |
+| `Esc` / `P` | tạm dừng | tạm dừng | `M` ở màn tạm dừng: về menu |
+| `1` / `2` / `Enter` | | | Shop: mua bình oxy / áo phao / đóng Shop |
+| `H` | **tương phản cao** bật/tắt | như bên trái | như bên trái (có nhớ lựa chọn) |
+| `R` / `L` | chơi lại / nhật ký sự kiện | như bên trái | |
+
+### Cảnh báo và tương phản cao
+
+- **Thủy quái ở gần:** banner "Thủy quái!" có biểu tượng ⚠, viền màn hình tím. Ở chế độ tương phản cao, Cá Sấu có thêm viền vàng.
+- **Oxy sắp hết:** thanh oxy đỏ nhấp nháy khi dưới 25%, banner "Oxy sắp hết — quay lên!". Hết oxy thì hiện "Hết hơi!" kèm đếm ngược tới lần mất Máu kế tiếp.
+- **Khách sắp giận:** khi kiên nhẫn dưới 25% thì hiện banner "Khách bàn … sắp giận!" (đếm giây), dấu giận đỏ và giọt mồ hôi trên đầu khách, thẻ đơn chuyển đỏ.
+- **Tương phản cao** (phím `H` hoặc `/?hc=1`): HUD nền đen viền trắng, màu cảnh báo bão hòa, cảnh phía sau tối bớt. Bằng chứng: [docs/proof/phase-4/](docs/proof/phase-4/).
+
+### Lệnh cho kiểm thử
+
+```bash
+PYTHONPATH=tests:. python3 -m unittest discover -s tests -v                                   # toàn bộ test
+python3 -m chonoi.headless --mode gather --seed 1 --ticks 600 --out out.jsonl                 # headless (gather|quan|day)
+python3 -m chonoi.headless --mode day --days 5 --seed 1 --ticks 120000 --out day.jsonl        # trọn 5 Ngày
+python3 -m chonoi.bench --seed 42 --duration 30 --out bench.json                              # benchmark có render (bench_cmd)
+```
+
+- `bench_cmd` (`python3 -m chonoi.bench`) mở trình duyệt headless ở 1280×720 vào cảnh lặn seed 42, Út Sen đứng yên tại bến. Lệnh làm nóng 3 s, đo 30 s, rồi ghi `bench.json` gồm `avg_fps`, `p1_low_fps`, `frames`, `measured_s`, `load_ms`.
+- Thêm `--show` để thấy cửa sổ khi đo.
+- Lệnh soak (`soak_cmd`) được khai trong [`game.contract.json`](game.contract.json).
+
+Khung Python trong `chonoi/` dựa trên starter, chi tiết ở [`docs/STARTER.md`](docs/STARTER.md).
 
 ## Tự do sáng tạo
 
@@ -66,3 +109,8 @@ Hết giờ mỗi phase thì gắn tag rồi đi tiếp; chỗ chưa xong ghi tr
 | 1 | Bảng "Đơn gọi" buổi tối: tên món tiếng Việt, trạng thái đơn, thanh kiên nhẫn đổi màu xanh → cam → đỏ | `index.html` → `drawQuan` | Tú |
 | 1 | Đồ họa chợ nổi: bình minh trên sông, rặng dừa nước, tia nắng, rong đáy, cá quẫy đuôi, hoa súng/điên điển, ghe ở bến, bọt nước khi lặn; tối là sàn ghe ván gỗ, dây đèn lồng, bếp cà ràng có lửa/hơi, khách đội nón lá với vòng kiên nhẫn | `index.html` → `drawGather`, `drawQuan` | Tú |
 | 1 | HUD khung gỗ: tim, sao uy tín, xu tiền, ô giỏ có hình nguyên liệu, bảng Đơn gọi, phím tắt dạng keycap; `L` bật nhật ký sự kiện + id (cho QA) | `index.html` | Tú |
+| 2 | Các màn Menu, DayIntro, EveningIntro, DayResult, Shop, Summary, Pause. Sim đứng yên (`/hold`) khi đang ở màn không chơi, nên không tiêu tick | `index.html`, `live.py` | Tú |
+| 2 | Cá Sấu Năm Chèo vẽ tay (mắt đỏ khi đuổi), bảng "Má Tư dặn" đã lấy/cần, gợi ý hái/cập bến/bắt cá khi tới gần | `index.html` | Tú |
+| 3 | HUD độ tươi: thanh tươi từng ô giỏ, hàng ươn gạch đỏ, kho theo độ tươi, giá tạm tính theo độ tươi trên thẻ đơn (đọc được cả kho đếm v1.1 lẫn kho cá thể v1.2) | `index.html` | Tú |
+| 3 | Sông phù sa có sóng động, lục bình trôi, ghe chợ nổi có cây bẹo, nhà sàn/dừa/ghe neo trên bờ (thị sai), camera bám người chơi + minimap; quán nhà bè rộng, Út Sen đi có bước chân, khách ăn có đũa và tô bốc khói | `index.html` | Tú |
+| 4 | Cảnh báo có biểu tượng ⚠ (thủy quái, oxy, khách sắp giận) + chế độ tương phản cao (`H`) | `index.html` | Tú |
