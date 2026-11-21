@@ -42,7 +42,9 @@ class Contract(unittest.TestCase):
             for key in ("oxygen_ticks", "hp", "oxygen_max_ticks", "hp_max", "at_surface"):
                 self.assertIn(key, s["player"])
             self.assertEqual(s["hold_capacity"], tuning_gather()["hold_capacity"])
-            self.assertEqual(len(s["fish"]), 6)
+            # v1.1 (docs/phase2.md 1.1): đầu ca có fish_initial = 8 đàn sinh theo seed (P1 là 6 đàn cố định).
+            # Đỏ cho tới khi lát 1 P2 (Hải) sinh cá xong — đó là việc còn thiếu, không phải lỗi test.
+            self.assertEqual(len(s["fish"]), tuning_gather()["fish_initial"])
             self.assertTrue(all(n["pos"][1] == 0 for n in s["nodes"]))
 
     def test_con_02_deterministic_bytes(self):

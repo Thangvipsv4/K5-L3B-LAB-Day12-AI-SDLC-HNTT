@@ -1,0 +1,48 @@
+{
+  "_ghi_chu": "Snapshot mẫu mode day theo hợp đồng v1.1 (docs/contracts/README.md mục 4). Chỉ để UI dựng song song; số liệu minh họa.",
+  "gather": {
+    "type": "snapshot", "tick": 1200, "sim_tick": 1200, "mode": "day", "phase": "gather", "phase_tick": 1200,
+    "state": "playing", "time_left_ticks": 9600, "money": 200, "earned": 320, "reputation": 3.2, "score": 620,
+    "day": 2,
+    "day_plan": {"dishes": {"ca_loc_nuong_trui": 2, "lau_ca_linh_dien_dien": 2},
+                 "ingredients": {"bong_dien_dien": 2, "ca_linh": 6, "ca_loc": 2}},
+    "upgrades": {"oxygen": 1}, "active_upgrades": {"oxygen": 1},
+    "player": {"pos": [58.5, 21.0], "vel": [4.0, 0.0], "heading_deg": 0, "oxygen_ticks": 600, "oxygen_max_ticks": 2700,
+               "hp": 2, "hp_max": 3, "zero_oxy_ticks": 0, "invuln_ticks": 45, "catch_cd_ticks": 0, "at_surface": false},
+    "hold": ["ca_linh", "ca_linh", "ca_linh", "bong_dien_dien"], "hold_count": 4, "hold_capacity": 12,
+    "nodes": [{"id": "N1", "pos": [12, 0], "kind": "bong_dien_dien", "ready": false, "regrow_ticks": 300},
+              {"id": "N5", "pos": [76, 0], "kind": "keo_neo", "ready": true, "regrow_ticks": 0}],
+    "fish": [{"id": "F1", "pos": [31.5, 10.0], "kind": "ca_loc", "heading_deg": 180, "age_ticks": 1200},
+             {"id": "F9", "pos": [75.0, 27.0], "kind": "ca_keo", "heading_deg": 90, "age_ticks": 0}],
+    "monsters": [{"id": "M1", "kind": "ca_sau", "pos": [61.0, 24.0], "state": "chase", "target_idx": 1, "state_ticks_left": 0}]
+  },
+  "quan": {
+    "type": "snapshot", "tick": 11000, "sim_tick": 11000, "mode": "day", "phase": "quan", "phase_tick": 200,
+    "state": "playing", "time_left_ticks": 10600, "money": 200, "earned": 320, "reputation": 3.2, "score": 620,
+    "day": 2,
+    "day_plan": {"dishes": {"ca_loc_nuong_trui": 2, "lau_ca_linh_dien_dien": 2},
+                 "ingredients": {"bong_dien_dien": 2, "ca_linh": 6, "ca_loc": 2}},
+    "upgrades": {"oxygen": 1}, "active_upgrades": {"oxygen": 1},
+    "player": {"pos": [4.0, 7.0]},
+    "stock": {"ca_linh": 3},
+    "hand": null,
+    "stoves": [{"id": "B1", "pos": [2, 8], "state": "cooking",
+                "dish": {"order_id": "C1", "dish_id": "lau_ca_linh_dien_dien", "base_price": 120},
+                "cook_ticks_left": 420, "ready_ticks": 0},
+               {"id": "B2", "pos": [5, 8], "state": "idle", "dish": null, "cook_ticks_left": 0, "ready_ticks": 0}],
+    "tables": [{"id": "T1", "pos": [9, 2], "customer_id": "C1"}, {"id": "T2", "pos": [13, 2], "customer_id": null},
+               {"id": "T3", "pos": [9, 6], "customer_id": null}, {"id": "T4", "pos": [13, 6], "customer_id": null}],
+    "customers": [{"id": "C1", "table_id": "T1", "dish_id": "lau_ca_linh_dien_dien", "state": "waiting",
+                   "order_status": "assigned", "order_tick": 120, "patience_ticks_left": 3520, "eat_ticks_left": 0,
+                   "reserved": {}, "base_price": 120, "tip": 0}]
+  },
+  "shop": {
+    "type": "snapshot", "tick": 21700, "sim_tick": 21700, "mode": "day", "phase": "shop", "phase_tick": 100,
+    "state": "paused", "time_left_ticks": 500, "money": 450, "earned": 570, "reputation": 3.4, "score": 870,
+    "day": 2,
+    "day_plan": {"dishes": {"ca_loc_nuong_trui": 2, "lau_ca_linh_dien_dien": 2},
+                 "ingredients": {"bong_dien_dien": 2, "ca_linh": 6, "ca_loc": 2}},
+    "upgrades": {"oxygen": 2, "hp": 1}, "active_upgrades": {"oxygen": 1},
+    "stock": {"ca_linh": 1}
+  }
+}

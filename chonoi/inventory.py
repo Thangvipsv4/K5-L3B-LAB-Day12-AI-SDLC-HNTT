@@ -10,7 +10,9 @@ import tempfile
 
 from .errors import BadInput
 
-KINDS_P1 = ("ca_loc", "ca_linh", "bong_dien_dien", "bong_sung")
+# v1.1: thêm ca_keo (cá kèo) và keo_neo (kèo nèo). Giữ tên KINDS_P1 để import cũ không vỡ.
+KINDS = ("ca_loc", "ca_linh", "ca_keo", "bong_dien_dien", "bong_sung", "keo_neo")
+KINDS_P1 = KINDS
 
 
 def validate_items(items, kinds=KINDS_P1):
