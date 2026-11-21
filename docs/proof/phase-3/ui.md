@@ -33,3 +33,22 @@ python3 -m chonoi.live --mode gather      # rồi mở /?mock=gather&v=12 | quan
 - Ngưỡng ươn đọc từ `cfg.freshness.spoiled_below` (`live.py` gửi khối `freshness` của contract). Chưa có khối này thì dùng 30.
 - `live.py` vẫn gọi `read_inventory(path)`. Khi Thắng đổi adapter v1.2 thì `--inventory` cá thể sẽ chạy mà không cần sửa UI.
 - Test: `PYTHONPATH=tests:. python3 -m unittest discover -s tests` cho 42/42 OK.
+
+## Làm đẹp giao diện (cùng commit)
+
+Chỉ đổi phần vẽ ở client; luật, snapshot và headless không đổi.
+
+- **Cảnh lặn:**
+  - Tỉ lệ theo chiều cao, nên sông kéo xuống gần đáy màn hình. Camera ngang bám Út Sen, kèm **minimap** "Bản đồ sông" (cá, quái, bến, khung nhìn).
+  - Nước **phù sa nâu** như sông Tiền, sông Hậu; phù sa lơ lửng trôi theo dòng.
+  - Mặt nước nhiều lớp sóng chuyển động, có bọt và ánh nắng lấp lánh. Trên mặt sông có lục bình trôi (hoa tím), lá dừa khô, ghe chợ nổi chở hàng treo **cây bẹo** chạy ngang.
+  - Bờ xa có thị sai: nhà sàn (mái lá hoặc tôn, cửa sổ có đèn, dây phơi đồ), dừa đung đưa, ghe neo, mây trôi.
+  - Đáy sông: đá, khúc gỗ chìm, rong.
+  - Panel giỏ tự mờ khi Út Sen bơi ra sau nó.
+- **Quán:**
+  - Sàn nhà bè trải hết chiều ngang nên các bàn giãn rộng. Vị trí bàn vẫn lấy từ contract, chỉ đổi tỉ lệ theo trục x/z.
+  - **Không có chữ đè lên bàn:** tên bàn đặt dưới mép bàn; khách chỉ có huy hiệu icon món và vòng kiên nhẫn; tên món và trạng thái nằm ở **thẻ đơn theo bàn** phía trên; nhãn bếp đặt bên phải bếp.
+  - **Kho ở dải cuối trang.**
+  - **Út Sen đi lại có hoạt cảnh:** bước chân, vung tay, nhún, xoay theo hướng đi, bưng tô món ở phía trước.
+  - Khách lắc lư nhẹ; lúc ăn thì có tô bốc khói và đũa đưa lên xuống; gần hết kiên nhẫn thì đổ mồ hôi.
+  - Trang trí: than hồng trong cà ràng, rổ nguyên liệu theo kho, biển "QUÁN MÁ TƯ", chậu cây, lan can, đèn lồng đung đưa, đom đóm.
