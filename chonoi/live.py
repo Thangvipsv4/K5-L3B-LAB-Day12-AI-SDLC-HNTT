@@ -10,7 +10,8 @@ Máy chủ HTTP nhỏ (ThreadingHTTPServer) phục vụ `chonoi/web/index.html` 
     POST /pause  -> bật/tắt menu tạm dừng (gửi cạnh `pause` vào sim; sim chưa hỗ trợ pause thì giữ sim đứng)
     POST /hold   -> {"hold": bool}: client đang ở màn Menu/DayIntro/EveningIntro/DayResult thì sim đứng
     POST /restart -> chơi lại từ đầu (cùng seed, cùng scenario)
-    GET  /mock.json -> snapshot mẫu docs/contracts/snapshot.day.sample.json (xem trước UI bằng ?mock=<màn>)
+    GET  /mock.json -> snapshot mẫu docs/contracts/snapshot.day.sample.json (xem trước UI bằng ?mock=<màn>);
+                       /mock.json?v=12 -> snapshot.v12.sample.json (kho cá thể + độ tươi, ?mock=<màn>&v=12)
 
 `hold` và pause dự phòng CHỈ có ở cửa sổ chơi: sim không bước, không có tick nào bị thay đổi, headless không liên quan.
 
@@ -39,8 +40,9 @@ WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 TICK_S = 1.0 / 60.0
 MAX_BODY = 4096
 RECENT_EVENTS = 40
-MOCK_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                         "docs", "contracts", "snapshot.day.sample.json")
+CONTRACTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "contracts")
+MOCK_PATH = os.path.join(CONTRACTS_DIR, "snapshot.day.sample.json")
+MOCK_V12_PATH = os.path.join(CONTRACTS_DIR, "snapshot.v12.sample.json")   # kho cá thể (Phase 3)
 
 
 class LiveGame:
@@ -119,7 +121,7 @@ class LiveGame:
             snap = self.session.snapshot()
             phase = snap.get("phase", self.mode)
             snap["meta"] = self.tuning.get(phase, {}) if phase in ("gather", "quan") else {}
-            snap["cfg"] = {k: self.tuning.get(k) for k in ("menu", "shop", "day_plan")}
+            snap["cfg"] = {k: self.tuning.get(k) for k in ("menu", "shop", "day_plan", "freshness")}
             snap["ui_hold"] = self.hold   # KHÔNG đặt "hold": trùng giỏ của gather
             snap["run_id"] = self.run_id
             snap["ui_paused"] = self.ui_paused
@@ -190,7 +192,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(200, self.game.state_json())
         elif path == "/mock.json":
             try:
-                with open(MOCK_PATH, "rb") as f:
+                with open(MOCK_V12_PATH if "v=12" in self.path else MOCK_PATH, "rb") as f:
                     self._send(200, f.read())
             except OSError:
                 self._send(404, b'{"error":"thieu snapshot mau"}')

@@ -241,5 +241,47 @@
     "tip": 0
    }
   ]
+ },
+ "shop": {
+  "type": "snapshot",
+  "mode": "day",
+  "day": 2,
+  "day_plan": {
+   "dishes": {
+    "ca_loc_nuong_trui": 2,
+    "lau_ca_linh_dien_dien": 2
+   },
+   "ingredients": {
+    "bong_dien_dien": 2,
+    "ca_linh": 6,
+    "ca_loc": 2
+   }
+  },
+  "money": 200,
+  "earned": 320,
+  "reputation": 3.2,
+  "score": 620,
+  "tick": 21700,
+  "sim_tick": 21700,
+  "phase": "shop",
+  "phase_tick": 100,
+  "state": "playing",
+  "time_left_ticks": 500,
+  "upgrades": {
+   "oxygen": 1
+  },
+  "active_upgrades": {},
+  "stock": [
+   {
+    "id": "I1",
+    "kind": "bong_dien_dien",
+    "fresh": 31.0
+   },
+   {
+    "id": "I5",
+    "kind": "ca_loc",
+    "fresh": 12.4
+   }
+  ]
  }
 }
