@@ -1,16 +1,23 @@
-"""Buổi tối — Mở Quán. KHUNG: đi lại, chặn biên, đồng hồ, kho nạp từ file/scenario.
+"""Buổi tối — Mở Quán. Lát 3: khách theo lịch, chọn món, giữ chỗ, kiên nhẫn, no_dish, customer_left.
 
 Nhóm viết tiếp (PRD-0 mục F, Quán):
-  TODO(nhóm, lát 3): khách đến theo lịch, chọn món nấu được, giữ chỗ nguyên liệu, kiên nhẫn,
-                     bỏ đi (customer_left), no_dish, vòng đời khách.
   TODO(nhóm, lát 4): interact tại bếp/bàn (cook_started, dish_ready, dish_picked, served),
-                     ăn xong trả tiền (paid), boa, uy tín, hết ca (quan_end).
+                     bếp cooking->ready, ăn xong trả tiền (paid), boa, uy tín.
 """
 
-from ..ids import sort_by_id
+from ..errors import BadInput
+from ..ids import id_key, sort_by_id
 from .ramp import ramp_velocity
 
 TICK = 60.0
+
+
+def _is_int(v):
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _is_num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
 class QuanSim:
@@ -23,24 +30,40 @@ class QuanSim:
         self.menu = tuning["menu"]
         self.rng = streams
         self.ids = ids
+
         p = scenario.get("player", {})
-        self.pos = list(p.get("pos", t["start_pos"]))
+        self.pos = [float(c) for c in p.get("pos", t["start_pos"])]
         self.vel = [float(c) for c in p.get("vel", [0.0, 0.0])]
         self._tgt = None
         self._ramp_left = 0
-        # kho: --inventory HOẶC scenario.stock (cả hai -> cli đã báo mã 2)
+
+        # kho vật lý (gồm cả phần giữ chỗ): --inventory HOẶC scenario.stock
         self.stock = dict(inventory if inventory is not None else scenario.get("stock", {}))
         self.hand = scenario.get("hand")
-        self.time_left_ticks = scenario.get("time_left_ticks", int(round(t["duration_s"] * 60)))
-        self.reputation = scenario.get("reputation", t["reputation_initial"])
-        self.stoves = [dict(s, state=s.get("state", "idle"), dish=s.get("dish"),
-                            cook_ticks_left=s.get("cook_ticks_left", 0), ready_ticks=s.get("ready_ticks", 0))
-                       for s in self._merge(t["stoves"], scenario.get("stoves", []))]
+        self.time_left_ticks = scenario.get("time_left_ticks", int(round(t["duration_s"] * TICK)))
+        self.phase_tick = 0
+
+        if "random_customers" in scenario and not isinstance(scenario["random_customers"], bool):
+            raise BadInput("random_customers phải là boolean")
+        self.random_customers = scenario.get("random_customers", True)
+
+        rep = scenario.get("reputation", t["reputation_initial"])
+        if not _is_num(rep) or not (t["reputation_min"] <= rep <= t["reputation_max"]):
+            raise BadInput(f"reputation phải nằm trong [{t['reputation_min']}, {t['reputation_max']}]")
+        self.reputation = float(rep)
+
+        self.stoves = [
+            dict(s, state=s.get("state", "idle"), dish=s.get("dish"),
+                 cook_ticks_left=s.get("cook_ticks_left", 0), ready_ticks=s.get("ready_ticks", 0))
+            for s in self._merge(t["stoves"], scenario.get("stoves", []))
+        ]
         self.tables = self._merge(t["tables"], scenario.get("tables", []))
-        # TODO(nhóm): khách dựng sẵn từ scenario (customers[]) và suy ra giữ chỗ (reserved).
-        self.customers = [dict(c, reserved=c.get("reserved", {})) for c in scenario.get("customers", [])]
+
+        self.customers = self._init_customers(scenario.get("customers", []))
         for e in self.customers:
             ids.reserve(e["id"])
+        self._validate_kitchen_and_orders()
+
         self.money = 0
         self.earned = 0
         self.shift_earned = 0
@@ -52,10 +75,208 @@ class QuanSim:
         by_id = {d["id"]: dict(d) for d in defaults}
         for u in updates:
             if u["id"] not in by_id:
-                from ..errors import BadInput
                 raise BadInput(f"id bếp/bàn không tồn tại: {u['id']}")
             by_id[u["id"]].update(u)
         return sort_by_id(list(by_id.values()))
+
+    def _validate_dish_payload(self, payload, ctx):
+        if not isinstance(payload, dict):
+            raise BadInput(f"{ctx}: payload món phải là object")
+        oid = payload.get("order_id")
+        did = payload.get("dish_id")
+        bp = payload.get("base_price")
+        if not isinstance(oid, str) or not oid:
+            raise BadInput(f"{ctx}: thiếu order_id hợp lệ")
+        if did not in self.menu:
+            raise BadInput(f"{ctx}: dish_id không hợp lệ ({did!r})")
+        if not _is_int(bp) or bp <= 0:
+            raise BadInput(f"{ctx}: base_price phải là số nguyên dương")
+
+    def _init_customers(self, raw_customers):
+        patience_max = int(round(self.t["patience_s"] * TICK))
+        eat_max = int(round(self.t["eat_s"] * TICK))
+        out = []
+
+        for raw in raw_customers:
+            cid = raw["id"]
+            did = raw.get("dish_id")
+            if did not in self.menu:
+                raise BadInput(f"customers.{cid}: dish_id không hợp lệ ({did!r})")
+
+            state = raw.get("state", "waiting")
+            if state not in ("waiting", "eating"):
+                raise BadInput(f"customers.{cid}: state phải là waiting hoặc eating")
+
+            order_tick = raw.get("order_tick", 0)
+            if not _is_int(order_tick) or order_tick < 0:
+                raise BadInput(f"customers.{cid}: order_tick phải là nguyên không âm")
+
+            pat = raw.get("patience_ticks_left", patience_max)
+            if not _is_int(pat) or not (0 <= pat <= patience_max):
+                raise BadInput(f"customers.{cid}: patience_ticks_left phải trong [0, {patience_max}]")
+
+            eat = raw.get("eat_ticks_left", 0)
+            if not _is_int(eat) or eat < 0:
+                raise BadInput(f"customers.{cid}: eat_ticks_left phải nguyên không âm")
+
+            status = raw.get("order_status", "reserved")
+            if status not in ("reserved", "assigned", "unfulfillable", "served"):
+                raise BadInput(f"customers.{cid}: order_status không hợp lệ ({status!r})")
+
+            recipe = self.menu[did]["recipe"]
+            if state == "eating":
+                if status != "served":
+                    raise BadInput(f"customers.{cid}: khách eating phải có order_status='served'")
+                if not (1 <= eat <= eat_max):
+                    raise BadInput(f"customers.{cid}: khách eating cần eat_ticks_left trong [1, {eat_max}]")
+                if "base_price" not in raw or not _is_int(raw["base_price"]) or raw["base_price"] <= 0:
+                    raise BadInput(f"customers.{cid}: khách eating thiếu base_price hợp lệ")
+                if "tip" not in raw or not _is_int(raw["tip"]) or raw["tip"] < 0:
+                    raise BadInput(f"customers.{cid}: khách eating thiếu tip hợp lệ")
+                if raw.get("reserved"):
+                    raise BadInput(f"customers.{cid}: khách eating phải có reserved rỗng")
+                reserved = {}
+                base_price = raw["base_price"]
+                tip = raw["tip"]
+            else:
+                if status == "served":
+                    raise BadInput(f"customers.{cid}: khách waiting không thể có order_status='served'")
+                if eat != 0:
+                    raise BadInput(f"customers.{cid}: khách waiting phải có eat_ticks_left=0")
+                base_price = raw.get("base_price", self.menu[did]["price"])
+                if not _is_int(base_price) or base_price <= 0:
+                    raise BadInput(f"customers.{cid}: base_price không hợp lệ")
+                tip = raw.get("tip", 0)
+                if not _is_int(tip) or tip < 0:
+                    raise BadInput(f"customers.{cid}: tip không hợp lệ")
+
+                if status == "reserved":
+                    if "reserved" in raw:
+                        res = raw["reserved"]
+                        if not isinstance(res, dict) or any(not _is_int(v) or v < 0 for v in res.values()):
+                            raise BadInput(f"customers.{cid}: reserved không hợp lệ")
+                        norm = {k: v for k, v in res.items() if v > 0}
+                        if norm != recipe:
+                            raise BadInput(f"customers.{cid}: giữ chỗ khác công thức món {did}")
+                        reserved = dict(norm)
+                    else:
+                        reserved = None  # sẽ cấp theo thứ tự (order_tick, id bàn)
+                else:
+                    if raw.get("reserved"):
+                        raise BadInput(f"customers.{cid}: đơn {status} phải có reserved rỗng")
+                    reserved = {}
+
+            out.append({
+                "id": cid,
+                "table_id": raw["table_id"],
+                "dish_id": did,
+                "order_tick": order_tick,
+                "state": state,
+                "patience_ticks_left": pat,
+                "eat_ticks_left": eat,
+                "order_status": status,
+                "reserved": reserved,
+                "base_price": base_price,
+                "tip": tip,
+            })
+
+        # Thiếu reserved ở đơn reserved -> cấp theo công thức theo order_tick rồi id bàn
+        used = {}
+        for c in out:
+            if c["reserved"]:
+                for k, v in c["reserved"].items():
+                    used[k] = used.get(k, 0) + v
+        for c in sorted(out, key=lambda x: (x["order_tick"], id_key(x["table_id"]))):
+            if c["reserved"] is None:
+                c["reserved"] = dict(self.menu[c["dish_id"]]["recipe"])
+                for k, v in c["reserved"].items():
+                    used[k] = used.get(k, 0) + v
+
+        for k, qty in used.items():
+            if qty > self.stock.get(k, 0):
+                raise BadInput(f"giữ chỗ nguyên liệu '{k}' ({qty}) vượt tồn kho ({self.stock.get(k, 0)})")
+
+        return out
+
+    def _validate_kitchen_and_orders(self):
+        active_dishes = []
+        for s in self.stoves:
+            st = s["state"]
+            if st not in ("idle", "cooking", "ready"):
+                raise BadInput(f"stoves.{s['id']}: state không hợp lệ ({st!r})")
+            ct = s["cook_ticks_left"]
+            rt = s["ready_ticks"]
+            if not _is_int(ct) or ct < 0 or not _is_int(rt) or rt < 0:
+                raise BadInput(f"stoves.{s['id']}: bộ đếm bếp không hợp lệ")
+            if st == "idle":
+                if s["dish"] is not None or ct != 0 or rt != 0:
+                    raise BadInput(f"stoves.{s['id']}: bếp idle không được có món/timer")
+            elif st == "cooking":
+                self._validate_dish_payload(s["dish"], f"stoves.{s['id']}.dish")
+                cook_max = int(round(self.menu[s["dish"]["dish_id"]]["cook_s"] * TICK))
+                if not (1 <= ct <= cook_max) or rt != 0:
+                    raise BadInput(f"stoves.{s['id']}: bếp cooking có timer không hợp lệ")
+                active_dishes.append((f"stoves.{s['id']}", s["dish"]))
+            else:  # ready
+                self._validate_dish_payload(s["dish"], f"stoves.{s['id']}.dish")
+                if ct != 0:
+                    raise BadInput(f"stoves.{s['id']}: bếp ready phải có cook_ticks_left=0")
+                active_dishes.append((f"stoves.{s['id']}", s["dish"]))
+
+        if self.hand is not None:
+            self._validate_dish_payload(self.hand, "hand")
+            active_dishes.append(("hand", self.hand))
+
+        by_order = {}
+        for src, payload in active_dishes:
+            oid = payload["order_id"]
+            if oid in by_order:
+                raise BadInput(f"đơn {oid} xuất hiện trùng ở {by_order[oid]} và {src}")
+            by_order[oid] = src
+
+        cust_by_id = {c["id"]: c for c in self.customers}
+        for oid, src in by_order.items():
+            c = cust_by_id.get(oid)
+            if c is None or c["order_status"] != "assigned":
+                raise BadInput(f"{src}: món của đơn {oid} không thuộc khách ở trạng thái assigned")
+            if by_order[oid] and self._payload_for(oid)["dish_id"] != c["dish_id"]:
+                raise BadInput(f"{src}: món không khớp dish_id của khách {oid}")
+
+        for c in self.customers:
+            if c["order_status"] == "assigned" and c["id"] not in by_order:
+                raise BadInput(f"customers.{c['id']}: đơn assigned phải có đúng một món ở bếp hoặc tay")
+
+    def _payload_for(self, order_id):
+        for s in self.stoves:
+            if s["dish"] and s["dish"].get("order_id") == order_id:
+                return s["dish"]
+        if self.hand and self.hand.get("order_id") == order_id:
+            return self.hand
+        return None
+
+    def _available_stock(self) -> dict:
+        avail = {k: v for k, v in self.stock.items() if v > 0}
+        for c in self.customers:
+            for k, v in c.get("reserved", {}).items():
+                avail[k] = avail.get(k, 0) - v
+        return avail
+
+    def _release_and_remove_customer(self, c):
+        c["reserved"] = {}
+        oid = c["id"]
+        for s in self.stoves:
+            if s["dish"] and s["dish"].get("order_id") == oid:
+                s["state"] = "idle"
+                s["dish"] = None
+                s["cook_ticks_left"] = 0
+                s["ready_ticks"] = 0
+        if self.hand and self.hand.get("order_id") == oid:
+            self.hand = None
+        self.customers = [x for x in self.customers if x["id"] != oid]
+
+    def _add_reputation(self, delta):
+        lo, hi = self.t["reputation_min"], self.t["reputation_max"]
+        self.reputation = max(float(lo), min(float(hi), self.reputation + delta))
 
     def snapshot(self) -> dict:
         occupied = {c["table_id"]: c["id"] for c in self.customers}
@@ -71,16 +292,100 @@ class QuanSim:
 
     def step(self, inp):
         events = []
+
+        # 1. Tăng đồng hồ, giảm timer ca, nấu, ăn và kiên nhẫn
+        self.phase_tick += 1
         self.time_left_ticks = max(0, self.time_left_ticks - 1)
-        # TODO(nhóm): giảm kiên nhẫn / nấu / ăn; bếp chín -> ready; xử lý khách theo thứ tự PRD-0 mục F.
+
+        # TODO(nhóm, lát 4): tăng ready_ticks cho bếp đã ready ở đầu bước; giảm cook_ticks_left -> ready + dish_ready
+
+        for c in sort_by_id(self.customers, key=lambda x: x["table_id"]):
+            if c["state"] == "waiting":
+                c["patience_ticks_left"] = max(0, c["patience_ticks_left"] - 1)
+            elif c["state"] == "eating":
+                c["eat_ticks_left"] = max(0, c["eat_ticks_left"] - 1)
+
+        # 2. Di chuyển
         self._move(inp)
-        # TODO(nhóm): tối đa MỘT interact, chọn đối tượng theo (khoảng cách, bếp trước bàn, id).
-        # TODO(nhóm): khách mới theo lịch (first_customer_tick, customer_interval_s), no_dish.
+
+        # 3. Tối đa MỘT interact (lát 4)
+        # TODO(nhóm, lát 4): chọn đối tượng trong interact_radius theo (khoảng cách, bếp trước bàn, id)
+
+        # 4. Theo id bàn: ăn xong trả tiền (lát 4); hết giờ / hết kiên nhẫn rời bàn
+        for c in sort_by_id(list(self.customers), key=lambda x: x["table_id"]):
+            if c["state"] == "eating":
+                # TODO(nhóm, lát 4): nếu eat_ticks_left == 0 hoặc hết ca -> paid + cộng tiền/boa/uy tín + xóa khách
+                continue
+            if self.time_left_ticks <= 0:
+                self._release_and_remove_customer(c)
+                events.append(("customer_left", {
+                    "order_id": c["id"],
+                    "table_id": c["table_id"],
+                    "reason": "closing",
+                    "reputation": self.reputation,
+                }))
+            elif c["patience_ticks_left"] <= 0:
+                self._add_reputation(self.t["left_reputation_delta"])
+                self._release_and_remove_customer(c)
+                events.append(("customer_left", {
+                    "order_id": c["id"],
+                    "table_id": c["table_id"],
+                    "reason": "patience",
+                    "reputation": self.reputation,
+                }))
+
         if self.time_left_ticks <= 0:
             self.done = True
             self.reason = "time"
-            events.append(("quan_end", {"reason": "time", "money": self.money, "earned": self.earned,
-                                        "shift_earned": self.shift_earned, "reputation": self.reputation}))
+            events.append(("quan_end", {
+                "reason": "time",
+                "money": self.money,
+                "earned": self.earned,
+                "shift_earned": self.shift_earned,
+                "reputation": self.reputation,
+            }))
+            return events
+
+        # 5. Khách mới theo lịch (chỉ khi còn giờ và bật random_customers)
+        first_ct = self.t["first_customer_tick"]
+        interval_ticks = int(round(self.t["customer_interval_s"] * TICK))
+        if (self.random_customers and self.phase_tick >= first_ct
+                and (self.phase_tick - first_ct) % interval_ticks == 0):
+            occupied = {c["table_id"] for c in self.customers}
+            free_tables = [tb for tb in self.tables if tb["id"] not in occupied]
+            if free_tables:
+                table = free_tables[0]  # bàn trống id nhỏ nhất
+                avail = self._available_stock()
+                cookable = [
+                    dish_id for dish_id in sorted(self.menu)
+                    if all(avail.get(k, 0) >= qty for k, qty in self.menu[dish_id]["recipe"].items())
+                ]
+                if not cookable:
+                    events.append(("no_dish", {}))
+                else:
+                    dish_id = self.rng.get("customer_dish").choice(cookable)
+                    cid = self.ids.new("C")
+                    patience_max = int(round(self.t["patience_s"] * TICK))
+                    cust = {
+                        "id": cid,
+                        "table_id": table["id"],
+                        "dish_id": dish_id,
+                        "order_tick": self.phase_tick,
+                        "state": "waiting",
+                        "patience_ticks_left": patience_max,
+                        "eat_ticks_left": 0,
+                        "order_status": "reserved",
+                        "reserved": dict(self.menu[dish_id]["recipe"]),
+                        "base_price": self.menu[dish_id]["price"],
+                        "tip": 0,
+                    }
+                    self.customers.append(cust)
+                    events.append(("customer_arrived", {
+                        "order_id": cid,
+                        "table_id": table["id"],
+                        "dish_id": dish_id,
+                    }))
+
         return events
 
     def _move(self, inp):
