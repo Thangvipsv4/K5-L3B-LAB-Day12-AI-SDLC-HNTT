@@ -8,7 +8,7 @@ phải có đúng một món, khách eating thiếu giá/tip...) — xem PRD-0 m
 import json
 
 from .errors import BadInput
-from .inventory import KINDS_P1, validate_items
+from .inventory import KINDS_P1, validate_item_list, validate_items
 
 GATHER_KEYS = {"player", "hold", "nodes", "fish", "random_fish", "time_left_ticks"}
 GATHER_PLAYER_KEYS = {"pos", "vel", "heading_deg", "hp", "oxygen_ticks", "zero_oxy_ticks",
@@ -172,7 +172,9 @@ def _validate_gather(b, tuning):
         raise BadInput("random_fish phải là boolean")
     if "hold" in b:
         h = b["hold"]
-        if not isinstance(h, list) or any(k not in KINDS_P1 for k in h):
+        if _has_freshness_contract(tuning):
+            validate_item_list(h)
+        elif not isinstance(h, list) or any(k not in KINDS_P1 for k in h):
             raise BadInput("hold phải là mảng id nguyên liệu hợp lệ")
         if len(h) > g["hold_capacity"]:
             raise BadInput("hold vượt sức chứa")
@@ -226,7 +228,10 @@ def _validate_quan(b, tuning):
         if arr in b:
             _check_ids(arr, b[arr])
     if "stock" in b:
-        validate_items(b["stock"])
+        if _has_freshness_contract(tuning):
+            validate_item_list(b["stock"])
+        else:
+            validate_items(b["stock"])
     p = b.get("player", {})
     if not isinstance(p, dict) or set(p) - QUAN_PLAYER_KEYS:
         raise BadInput("quan.player chỉ có pos và vel")
@@ -237,8 +242,46 @@ def _validate_quan(b, tuning):
         raise BadInput("player.vel phải là [x, z]")
     table_ids = [c.get("table_id") for c in b.get("customers", [])]
     known = {t["id"] for t in tuning["quan"]["tables"]} | {t.get("id") for t in b.get("tables", [])}
+    if _has_freshness_contract(tuning):
+        stock = b.get("stock", [])
+        by_id = {item["id"]: item for item in stock}
+        reserved_all = set()
+        for c in b.get("customers", []):
+            if "reserved" not in c:
+                continue
+            reserved = c["reserved"]
+            if not isinstance(reserved, list) or any(not isinstance(i, str) or not i for i in reserved):
+                raise BadInput(f"customers.{c.get('id')}.reserved phải là mảng id")
+            if len(reserved) != len(set(reserved)):
+                raise BadInput(f"customers.{c.get('id')}.reserved có id trùng")
+            status = c.get("order_status", "reserved")
+            if status != "reserved" and reserved:
+                raise BadInput(f"customers.{c.get('id')}: chỉ đơn reserved mới được giữ nguyên liệu")
+            if status == "reserved" and reserved:
+                missing = [ident for ident in reserved if ident not in by_id]
+                if missing:
+                    raise BadInput(f"customers.{c.get('id')}.reserved trỏ tới id không có trong stock: {missing}")
+                if any(by_id[ident]["fresh"] < 30 for ident in reserved):
+                    raise BadInput(f"customers.{c.get('id')}.reserved chứa nguyên liệu đã ươn")
+                if reserved_all.intersection(reserved):
+                    raise BadInput("một cá thể không thể được giữ cho nhiều đơn")
+                reserved_all.update(reserved)
+                dish_id = c.get("dish_id")
+                if dish_id in tuning["menu"]:
+                    need = tuning["menu"][dish_id]["recipe"]
+                    got = {}
+                    for ident in reserved:
+                        kind = by_id[ident]["kind"]
+                        got[kind] = got.get(kind, 0) + 1
+                    if got != need:
+                        raise BadInput(f"customers.{c.get('id')}.reserved không khớp công thức món")
     for c in b.get("customers", []):
         if not isinstance(c.get("table_id"), str) or c["table_id"] not in known:
             raise BadInput(f"customers.{c['id']}: table_id phải là bàn có thật")
     if len(table_ids) != len(set(table_ids)):
         raise BadInput("hai khách cùng bàn")
+
+
+def _has_freshness_contract(tuning):
+    """Keep the checked-in v1.1 scenario contract working during integration."""
+    return "freshness" in tuning
