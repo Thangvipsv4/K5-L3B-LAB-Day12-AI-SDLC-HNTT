@@ -1,9 +1,10 @@
-# Hợp đồng tích hợp — Nhóm HNTT · **v1.1 (Phase 2)**
+# Hợp đồng tích hợp — Nhóm HNTT · lịch sử v1.1–v1.3
 
-Chốt ở phút 0–5 của Phase 2, theo [docs/phase2.md](../phase2.md) mục 4. Khi đổi hợp đồng thì báo cả nhóm và cập nhật tài liệu này. Nam (Integrator) giữ bản chuẩn.
+Các mục Phase 2–3 dưới đây ghi lại quyết định lịch sử theo [docs/phase2.md](../phase2.md) và [docs/phase3.md](../phase3.md). Khi đổi hợp đồng thì báo cả nhóm và cập nhật tài liệu này. Nam (Integrator) giữ bản chuẩn.
 
-- Số liệu nằm **chỉ** trong [`game.contract.json`](../../game.contract.json) (`contract_version: "1.1"`), luật đọc từ đó và không hard-code.
-- Validator [`chonoi/contract.py`](../../chonoi/contract.py) đã kiểm đủ khóa v1.1, gồm cá, quái, `day_plan` (ingredients = tổng công thức × số suất) và `shop`. Sai một khóa thì headless thoát với mã 2.
+- Manifest runtime hiện tại là [`game.contract.json`](../../game.contract.json), v1.3. Snapshot Phase 3 v1.2 được lưu riêng tại [`game.contract.v1.2.json`](game.contract.v1.2.json); file snapshot không thay thế manifest runtime.
+- Snapshot v1.2 giữ nguyên tuning và CLI gốc v1.1/Phase 2, đồng thời thêm cấu hình freshness và schema kho cá thể theo Phase 3. Các mục dưới đây mô tả lịch sử thiết kế, không khẳng định bản runtime hiện đang ở v1.2.
+- Validator [`chonoi/contract.py`](../../chonoi/contract.py) kiểm tra tuning Phase 2 và cấu hình freshness khi có mặt. Sai dữ liệu thì headless thoát với mã 2.
 
 ---
 

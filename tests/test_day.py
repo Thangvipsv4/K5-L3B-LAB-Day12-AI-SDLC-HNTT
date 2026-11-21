@@ -126,6 +126,14 @@ class ShopRules(unittest.TestCase):
         self.assertEqual(shop.step(State(buy="hp"))[0],
                          ("bought", {"upgrade": "hp", "level": 1, "price": 250, "money": 0}))
 
+    def test_individual_stock_keeps_id_and_freshness(self):
+        original = [{"id": "I7", "kind": "ca_loc", "fresh": 98.5}]
+        shop = ShopSim(self.tuning, day=1, money=0, upgrades={}, stock=original)
+        self.assertEqual(shop.snapshot()["stock"], original)
+        shop.step(State(edges={"shop_done"}))
+        self.assertEqual(shop.stock[0]["id"], "I7")
+        self.assertEqual(shop.snapshot()["stock"][0]["fresh"], 98.5)
+
     def test_shop_expires_after_exactly_600_active_ticks(self):
         shop = ShopSim(self.tuning, day=1, money=0, upgrades={}, stock={})
         for _ in range(599):

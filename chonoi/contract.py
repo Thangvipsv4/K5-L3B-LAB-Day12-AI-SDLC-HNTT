@@ -27,6 +27,13 @@ def load_contract(path=DEFAULT_PATH) -> dict:
             c = json.load(f)
     except (OSError, ValueError) as e:
         raise BadInput(f"không đọc được {path}: {e}")
+    if c.get("contract_version") == "1.3":
+        if "bench_cmd" not in c:
+            raise BadInput("contract v1.3 cần khai báo bench_cmd (null nếu dependency chưa sẵn sàng)")
+        if c["bench_cmd"] is not None and (not isinstance(c["bench_cmd"], str) or not c["bench_cmd"].strip()):
+            raise BadInput("bench_cmd phải là lệnh không rỗng hoặc null khi đang BLOCKED")
+        if not isinstance(c.get("soak_cmd"), str) or not c["soak_cmd"].strip():
+            raise BadInput("contract v1.3 cần soak_cmd là lệnh không rỗng")
     validate_tuning(c.get("tuning"))
     return c
 

@@ -2,6 +2,15 @@
 
 Tất cả thay đổi đáng chú ý của dự án **Chợ Nổi** (nhóm **HNTT**) được ghi nhận tại đây.
 
+### Phase 4 — soak and contract QA
+
+- Added the deterministic `python3 -m chonoi.soak` runner for up to ten
+  consecutive days, carrying money, cumulative revenue, reputation, upgrades,
+  RNG streams, and globally allocated item IDs; plans D1–D5 repeat for D6–D10.
+- Updated the contract version to 1.3 and declared the soak command while
+  retaining the renderer benchmark command provided on `origin/main`.
+- Added regression and soak verification evidence under `docs/proof/phase-4/`.
+
 ## [1.0.0] - Phase 4 (Bench, Soak, Đóng gói & Phát hành)
 - **Bench & Soak**: Bổ sung `bench_cmd` (đo FPS/p1_low/load_ms ở 1280×720) và `soak_cmd` (chạy headless nhiều ngày liên tiếp, kiểm tra không crash) trong `game.contract.json` v1.3.
 - **UI & Trợ năng**: Thêm 3 cảnh báo trực quan (thủy quái gần, oxy sắp hết, khách sắp giận) và chế độ tương phản cao trên `chonoi/web/index.html`.

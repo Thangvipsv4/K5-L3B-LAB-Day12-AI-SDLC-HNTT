@@ -1,5 +1,8 @@
 """Phase 2 Shop phase, independent from the gather and restaurant simulations."""
 
+from ..inventory import item_in, item_out
+from ..ids import sort_by_id
+
 
 class ShopSim:
     mode = "shop"
@@ -10,14 +13,23 @@ class ShopSim:
         self.day = day
         self.money = money
         self.upgrades = dict(upgrades)
-        self.stock = dict(stock)
+        if isinstance(stock, list):
+            # v1.2 stock crosses from Quan into Shop unchanged; Shop never
+            # decays or consumes it, but it must retain item IDs and freshness.
+            self.stock = [item_in(item_out(item) if "u" in item else item)
+                          for item in stock]
+            self.stock = sort_by_id(self.stock)
+        else:
+            self.stock = dict(stock)
         self.time_left_ticks = self.t["max_ticks"]
         self.phase_tick = 0
         self.done = False
         self.reason = None
 
     def snapshot(self):
-        return {"stock": dict(self.stock)}
+        stock = ([item_out(item) for item in self.stock]
+                 if isinstance(self.stock, list) else dict(self.stock))
+        return {"stock": stock}
 
     def step(self, inp):
         if self.done:

@@ -5,8 +5,15 @@
   },
   "gather": {
     "hold": [
-      "ca_loc", "ca_loc", "ca_loc",
-      "bong_sung", "bong_sung", "bong_sung", "bong_sung", "bong_sung", "bong_sung"
+      {"id": "I1", "kind": "ca_loc", "fresh": 100},
+      {"id": "I2", "kind": "ca_loc", "fresh": 100},
+      {"id": "I3", "kind": "ca_loc", "fresh": 100},
+      {"id": "I4", "kind": "bong_sung", "fresh": 100},
+      {"id": "I5", "kind": "bong_sung", "fresh": 100},
+      {"id": "I6", "kind": "bong_sung", "fresh": 100},
+      {"id": "I7", "kind": "bong_sung", "fresh": 100},
+      {"id": "I8", "kind": "bong_sung", "fresh": 100},
+      {"id": "I9", "kind": "bong_sung", "fresh": 100}
     ],
     "random_fish": false,
     "time_left_ticks": 1
