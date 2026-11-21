@@ -1,12 +1,12 @@
 # haihai868 — phản tư cá nhân (≤ 200 từ)
 
 - Tôi đã làm (kèm link commit):
-  - Phase 1 `sim/gather` (commit [7e4289a](https://github.com/Thangvipsv4/K5-L3B-LAB-Day12-AI-SDLC-HNTT/commit/7e4289a)): hoàn thành Lát 1 (oxy, ngạt 60 tick, 3 Máu, ngất LIFO, dive/surface/oxygen_empty/choke/faint) và Lát 2 (hái nút N1–N4 hồi 20s, bắt cá F1–F6, cooldown, cập bến, xuất file kho).
-  - Phase 2: chuẩn bị logic cá bơi, sinh cá theo chu kỳ 360 tick và cơ chế quái vật Cá Sấu Năm Chèo M1 tuần tra/truy đuổi/recoil.
-  - Vai trò PO: lập và theo dõi [docs/clarify.md](file:///d:/K5-L3B-LAB-Day12-AI-SDLC-HNTT/docs/clarify.md) (vấn đề `test_template_is_rejected`).
+  - Phase 1 & 2 `sim/gather`: hoàn thành lặn, oxy, ngạt, 3 Máu, ngất LIFO, hái nút, bắt cá/sinh cá 360 tick, quái Cá Sấu M1 tuần tra/đuổi/recoil.
+  - Phase 3 `sim/gather`: chuyển sang kho cá thể, biểu diễn tươi `u = fresh * 240`, hao $0.5$/s (2 u/tick) ở đầu bước, phát `spoiled` khi $u < 7200$ theo id, mất đồ cá thể theo LIFO, xuất kho và snapshot chuẩn v1.2 song song v1.1.
+  - Vai trò PO: lập [docs/clarify.md](file:///d:/K5-L3B-LAB-Day12-AI-SDLC-HNTT/docs/clarify.md), định dạng [docs/phase3.md](file:///d:/K5-L3B-LAB-Day12-AI-SDLC-HNTT/docs/phase3.md).
 - Tôi đã review (kèm link):
-  - Đọc chéo lát 3 và lát 4 của Nam (`sim/quan`, commit [e514ecd](https://github.com/Thangvipsv4/K5-L3B-LAB-Day12-AI-SDLC-HNTT/commit/e514ecd) và [6d174da](https://github.com/Thangvipsv4/K5-L3B-LAB-Day12-AI-SDLC-HNTT/commit/6d174da)).
+  - Đọc chéo lát 3 & 4 của Nam (`sim/quan`) và tài liệu kế hoạch Phase 3 của Thắng/Nam.
 - AI sai ở đâu và tôi phát hiện thế nào:
-  - Khi triển khai ngất xỉu, AI ban đầu xóa thẳng giỏ đồ mà quên ghi nhận mảng `lost` theo thứ tự LIFO (nhặt sau mất trước) cho sự kiện `faint`. Phát hiện khi đối chiếu bảng sự kiện mục E trong PRD-0 và đã yêu cầu AI sửa lại ngay.
+  - Khi triển khai độ tươi, AI định trừ float trực tiếp làm sai số dấu phẩy động ở ngưỡng 30; tôi phát hiện qua tài liệu ticket và yêu cầu dùng đơn vị nguyên $u$ ($240$ đơn vị/điểm tươi) theo adapter.
 - Điều tôi học được:
-  - Kiểm thử hộp đen với các scenario độc lập giúp xác minh chính xác các mốc thời gian (tick biên) mà không phụ thuộc vào toàn bộ tiến trình game.
+  - Thiết kế kiến trúc với biểu diễn số nguyên quy ước loại bỏ hoàn toàn lỗi rẽ nhánh do sai số float tại các ngưỡng điều kiện.

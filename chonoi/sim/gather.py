@@ -8,6 +8,7 @@ Phase 2: Đàn cá bơi theo độ sâu, sinh cá chu kỳ 360 tick, thủy quá
 """
 
 import math
+from fractions import Fraction
 
 from ..ids import id_key, sort_by_id
 from ..inventory import hold_to_items
@@ -48,7 +49,44 @@ class GatherSim:
         self.invuln_ticks = p.get("invuln_ticks", 0)
         self.catch_cd_ticks = p.get("catch_cd_ticks", 0)
         self.attack_cd_ticks = p.get("attack_cd_ticks", 0)
-        self.hold = list(scenario.get("hold", []))  # thứ tự nhặt, cuối mảng là mới nhất
+
+        # Phase 3: Kho cá thể và độ tươi
+        raw_hold = scenario.get("hold", [])
+        has_dict_hold = any(isinstance(x, dict) for x in raw_hold)
+        has_v12_flag = (scenario.get("contract_version") == "1.2" or
+                        scenario.get("version") == "1.2" or
+                        tuning.get("contract_version") == "1.2" or
+                        "freshness" in tuning or
+                        "freshness" in t)
+        self.is_v12 = has_dict_hold or has_v12_flag
+
+        self.hold = []
+        spoil_threshold = int(round(self.t.get("freshness", {}).get("spoiled_below", 30) * 240))
+        for x in raw_hold:
+            if isinstance(x, dict):
+                x_id = x["id"]
+                ids.reserve(x_id)
+                x_kind = x["kind"]
+                x_fresh = x.get("fresh", 100.0)
+                f_val = float(Fraction(str(x_fresh)) * 240)
+                u = round(f_val) if abs(f_val - round(f_val)) < 1e-6 else int(f_val)
+                self.hold.append({
+                    "id": x_id,
+                    "kind": x_kind,
+                    "u": u,
+                    "spoiled": u < spoil_threshold
+                })
+            else:
+                if self.is_v12:
+                    new_id = ids.new("I")
+                    self.hold.append({
+                        "id": new_id,
+                        "kind": str(x),
+                        "u": 24000,
+                        "spoiled": False
+                    })
+                else:
+                    self.hold.append(str(x))
         self.time_left_ticks = scenario.get("time_left_ticks", int(round(t["duration_s"] * TICK)))
 
         # Nút hái
@@ -126,7 +164,10 @@ class GatherSim:
         self.reason = None
 
     # --- giao diện cho runner -------------------------------------------------
-    def inventory_items(self) -> dict:
+    def inventory_items(self):
+        if self.is_v12:
+            return [{"id": it["id"], "kind": it["kind"], "fresh": float(it["u"] / 240)}
+                    for it in sort_by_id(self.hold)]
         return hold_to_items(self.hold)
 
     def snapshot(self) -> dict:
@@ -140,9 +181,15 @@ class GatherSim:
         if "attack_cd_ticks" in self.scenario.get("player", {}):
             p_snap["attack_cd_ticks"] = self.attack_cd_ticks
 
+        if self.is_v12:
+            hold_out = [{"id": it["id"], "kind": it["kind"], "fresh": float(it["u"] / 240)}
+                        for it in self.hold]
+        else:
+            hold_out = list(self.hold)
+
         snap = {
             "player": p_snap,
-            "hold": list(self.hold), "hold_count": len(self.hold),
+            "hold": hold_out, "hold_count": len(self.hold),
             "hold_capacity": self.t["hold_capacity"],
             "nodes": [{"id": n["id"], "pos": list(n["pos"]), "kind": n["kind"],
                        "ready": n["regrow_ticks"] == 0, "regrow_ticks": n["regrow_ticks"]}
@@ -180,6 +227,21 @@ class GatherSim:
                 if n["regrow_ticks"] == 0:
                     events.append(("node_regrown", {"node_id": n["id"]}))
 
+        # 1.1 Hao tươi của hàng có sẵn trong giỏ (ở đầu bước - Phase 3)
+        if self.is_v12:
+            decay_per_s = self.t.get("freshness", {}).get("gather_decay_per_s", 0.5)
+            u_decay = int(round(decay_per_s * 240 / TICK))  # 2 u/tick
+            spoil_threshold = int(round(self.t.get("freshness", {}).get("spoiled_below", 30) * 240))  # 7200
+            newly_spoiled = []
+            for it in self.hold:
+                was_fresh = it["u"] >= spoil_threshold
+                it["u"] = max(0, it["u"] - u_decay)
+                if was_fresh and it["u"] < spoil_threshold and not it.get("spoiled", False):
+                    it["spoiled"] = True
+                    newly_spoiled.append(it)
+            for it in sort_by_id(newly_spoiled):
+                events.append(("spoiled", {"item_id": it["id"], "kind": it["kind"], "location": "hold"}))
+
         # 2. bơi người chơi + chặn mép, dive / surface, oxy & ngạt
         was_surface = self._at_surface()
         self._move(inp)
@@ -208,8 +270,13 @@ class GatherSim:
                     events.append(("choke", {"hp": self.hp}))
                     if self.hp <= 0:
                         self.hp = 0
-                        lost = list(reversed(self.hold))
-                        self.hold = []
+                        lost = []
+                        while self.hold:
+                            popped = self.hold.pop()
+                            if self.is_v12:
+                                lost.append({"id": popped["id"], "kind": popped["kind"], "fresh": float(popped["u"] / 240)})
+                            else:
+                                lost.append(popped)
                         events.append(("faint", {"cause": "choke", "lost": lost, "hp": 0}))
                         self._finish("fainted", events)
                         return events
@@ -231,7 +298,12 @@ class GatherSim:
                     node_yield = self.t.get("node_yield", 1)
                     free = self.t["hold_capacity"] - len(self.hold)
                     if free >= node_yield:
-                        self.hold.extend([target["kind"]] * node_yield)
+                        if self.is_v12:
+                            for _ in range(node_yield):
+                                new_id = self.ids.new("I")
+                                self.hold.append({"id": new_id, "kind": target["kind"], "u": 24000, "spoiled": False})
+                        else:
+                            self.hold.extend([target["kind"]] * node_yield)
                         target["regrow_ticks"] = int(round(self.t["regrow_s"] * TICK))
                         events.append(("gather", {"node_id": target["id"], "kind": target["kind"], "amount": node_yield}))
                     else:
@@ -249,7 +321,12 @@ class GatherSim:
                     fish_yield = fish_yield_map.get(target["kind"], 1)
                     free = self.t["hold_capacity"] - len(self.hold)
                     if free >= fish_yield:
-                        self.hold.extend([target["kind"]] * fish_yield)
+                        if self.is_v12:
+                            for _ in range(fish_yield):
+                                new_id = self.ids.new("I")
+                                self.hold.append({"id": new_id, "kind": target["kind"], "u": 24000, "spoiled": False})
+                        else:
+                            self.hold.extend([target["kind"]] * fish_yield)
                         self.fish.remove(target)
                         events.append(("fish_caught", {"fish_id": target["id"], "kind": target["kind"], "yield": fish_yield}))
                         self.catch_cd_ticks = int(round(self.t["catch_cooldown_s"] * TICK))
@@ -355,7 +432,11 @@ class GatherSim:
                 lost_count = math.floor(len(self.hold) * loss_ratio)
                 lost = []
                 for _ in range(lost_count):
-                    lost.append(self.hold.pop())
+                    popped = self.hold.pop()
+                    if self.is_v12:
+                        lost.append({"id": popped["id"], "kind": popped["kind"], "fresh": float(popped["u"] / 240)})
+                    else:
+                        lost.append(popped)
                 self.invuln_ticks = mo_cfg.get("invuln_ticks", 90)
                 events.append(("monster_hit", {"monster_id": target_m["id"], "hp": self.hp, "lost": lost, "pos": list(self.pos)}))
 
@@ -371,8 +452,13 @@ class GatherSim:
 
                 if self.hp <= 0:
                     self.hp = 0
-                    faint_lost = list(reversed(self.hold))
-                    self.hold = []
+                    faint_lost = []
+                    while self.hold:
+                        popped = self.hold.pop()
+                        if self.is_v12:
+                            faint_lost.append({"id": popped["id"], "kind": popped["kind"], "fresh": float(popped["u"] / 240)})
+                        else:
+                            faint_lost.append(popped)
                     events.append(("faint", {"cause": "monster", "lost": faint_lost, "hp": 0}))
                     self._finish("fainted", events)
                     return True
