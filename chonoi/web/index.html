@@ -104,7 +104,8 @@ const KIND_NAME = { ca_loc: "cá lóc", ca_linh: "cá linh", ca_keo: "cá kèo",
 const kc = (k) => KIND_COLOR[k] || "#bbbbbb";
 const DISH_NAME = { ca_loc_nuong_trui: "Cá lóc nướng trui", goi_bong_sung: "Gỏi bông súng", lau_ca_linh_dien_dien: "Lẩu cá linh điên điển" };
 const DISH_MAIN = { ca_loc_nuong_trui: "ca_loc", goi_bong_sung: "bong_sung", lau_ca_linh_dien_dien: "ca_linh" };
-const dn = (d) => DISH_NAME[d] || d || "?";
+// món có thể là chuỗi dish_id hoặc payload {order_id, dish_id, base_price} (bếp/tay ở lát 4)
+const dn = (d) => { const id = d && typeof d === "object" ? d.dish_id : d; return DISH_NAME[id] || id || "?"; };
 const STOVE_STATE = { idle: "Bếp rảnh", cooking: "Đang nấu", ready: "Chín · E lấy", burnt: "Cháy" };
 const ORDER_STATUS = { reserved: ["Đã giữ nguyên liệu", C.gold], assigned: ["Đang nấu", C.warn], unfulfillable: ["Không nấu được", C.danger], served: ["Đã phục vụ", C.ok] };
 const REASON = { docked: "Cập bến an toàn", time: "Hết giờ", fainted: "Ngất xỉu dưới nước" };
